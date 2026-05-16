@@ -1,7 +1,7 @@
 from datetime import datetime
 from app.db.database import db
 from app.core.security import hash_password, verify_password
-from app.models.auth_models import User
+from app.models.user_model import User
 from app.schemas.auth_schema import RegisterUserRequest, LoginUserRequest
 from app.core.auth import create_access_token, create_refresh_token
 

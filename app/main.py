@@ -4,13 +4,15 @@ from starlette.middleware.cors import CORSMiddleware
 from app.core.config import config
 from app.db.database import create_indexes
 from app.routes.auth_routes import router as auth_router
+from app.routes.goal_routes import router as goal_router
 
 app = FastAPI(
     title="NorthStar API Gateway",
-    version="1.0",
+    version="1.0"
 )
 
 app.include_router(auth_router)
+app.include_router(goal_router)
 
 app.add_middleware(
     CORSMiddleware,

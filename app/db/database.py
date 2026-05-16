@@ -13,3 +13,7 @@ redis_client = Redis(
 async def create_indexes():
     await db.users.create_index("email", unique=True)
     await db.users.create_index("employee_id", unique=True)
+    await db.users.create_index("manager_id")
+    await db.goals.create_index("status")
+    await db.goals.create_index("employee_id")
+    await db.goals.create_index("manager_id")
