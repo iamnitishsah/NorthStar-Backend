@@ -59,8 +59,13 @@ async def login_user(payload: LoginUserRequest):
 
     user_id = user["_id"]
 
-    access = create_access_token(str(user_id))
-    refresh = create_refresh_token(str(user_id))
+    access = create_access_token(
+        employee_id=user["employee_id"],
+        role=user["role"],
+        designation=user["designation"],
+        department=user["department"]
+    )
+    refresh = create_refresh_token(str(user["employee_id"]))
 
     await users.update_one(
         {"_id": user_id},

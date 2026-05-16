@@ -3,11 +3,13 @@ from jose import jwt
 from app.core.config import config
 
 
-def create_access_token(user_id: str):
+def create_access_token(employee_id: str, role: str, designation: str, department: str):
     now = datetime.utcnow()
     payload = {
-        "sub": str(user_id),
-        # "role": role,
+        "sub": str(employee_id),
+        "role": role,
+        "designation": designation,
+        "department": department,
         "iat": now,
         "exp": now + config.ACCESS_TOKEN_EXPIRE,
     }
@@ -15,10 +17,10 @@ def create_access_token(user_id: str):
     return jwt.encode(payload, config.JWT_SECRET, algorithm="HS256")
 
 
-def create_refresh_token(user_id: str):
+def create_refresh_token(employee_id: str):
     now = datetime.utcnow()
     payload = {
-        "sub": str(user_id),
+        "sub": str(employee_id),
         "iat": now,
         "exp": now + config.REFRESH_TOKEN_EXPIRE,
     }
