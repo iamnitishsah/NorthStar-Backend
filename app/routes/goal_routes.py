@@ -4,14 +4,15 @@ from typing import List
 from app.dependencies.auth_dependency import get_current_user
 from app.dependencies.role_dependency import require_employee
 from app.schemas.goal_schema import CreateGoalRequest, UpdateGoalRequest, ReturnGoalRequest, ViewGoalResponse
-from app.services.goal_service import view_goals, create_goal, update_goal, delete_goal, submit_goal
+from app.services.goal_service import my_goals, create_goal, update_goal, delete_goal, submit_goal, view_goals
 
 router = APIRouter(prefix="/goals", tags=["Goals"])
 
 
+'''Employee Goal Management Endpoints'''
 @router.get("/my", response_model=List[ViewGoalResponse])
-async def view_goals_router(current_user: dict = Depends(get_current_user)):
-    goal = await view_goals(current_user)
+async def my_goals_router(current_user: dict = Depends(get_current_user)):
+    goal = await my_goals(current_user)
     if not goal:
         raise HTTPException(status_code=404, detail="Goal not found")
     return goal
@@ -62,3 +63,13 @@ async def submit_goal_router(
     if not success:
         raise HTTPException(status_code=400, detail=message)
     return {"message": "Goal submitted for approval successfully"}
+
+
+
+'''Manager Goal Review Endpoints'''
+@router.get("/review", response_model=dict[str, List[ViewGoalResponse]])
+async def view_goals_router(current_user: dict = Depends(get_current_user)):
+    goals = await view_goals(current_user)
+    if not goals:
+        raise HTTPException(status_code=404, detail="No goals found for review")
+    return goals

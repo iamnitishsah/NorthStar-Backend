@@ -1,4 +1,5 @@
 from app.models.goal_model import Goal
+from collections import defaultdict
 from app.schemas.goal_schema import CreateGoalRequest, UpdateGoalRequest, ReturnGoalRequest, ViewGoalResponse
 from app.db.database import db
 from bson import ObjectId
@@ -10,7 +11,8 @@ from typing import List
 goals=db.goals
 
 
-async def view_goals(current_user: dict) -> List[ViewGoalResponse]:
+'''Service functions for Employee Goal Management'''
+async def my_goals(current_user: dict) -> List[ViewGoalResponse]:
     employee_id = current_user["employee_id"]
     manager_id = current_user["manager_id"]
 
@@ -103,7 +105,7 @@ async def delete_goal(goal_id: str, current_user: dict, employee: dict) -> tuple
     return True, "Goal deleted successfully"
 
 
-async def submit_goal(current_user: dict, employee: dict) -> tuple[bool, str]:    
+async def submit_goal(current_user: dict, employee: dict) -> tuple[bool, str]:
     employee_goals = await goals.find({"employee_id": current_user["employee_id"]}).to_list(length=None)
 
     if len(employee_goals) < 1 or len(employee_goals) > 8:
@@ -135,3 +137,34 @@ async def submit_goal(current_user: dict, employee: dict) -> tuple[bool, str]:
     )
 
     return True, "Goal submitted successfully"
+
+
+
+'''Service function for Manager to view, approve, or return employee goals'''
+async def view_goals(current_user: dict) -> dict[str, List[ViewGoalResponse]]:
+    employee_id = current_user["employee_id"]
+    manager_id = current_user["manager_id"]
+
+    goal_data = goals.find({"manager_id": manager_id}).sort("created_at", -1)
+
+    grouped_goals = defaultdict(list)
+
+    async for data in goal_data:
+        goal = ViewGoalResponse(
+            goal_id=str(data["_id"]),
+            employee_name=data["employee_name"],
+            title=data["title"],
+            description=data.get("description"),
+            weightage=data["weightage"],
+            target_date=data.get("target_date"),
+            status=data["status"],
+            manager_note=data.get("manager_note"),
+            approver_name=data.get("approver_name"),
+            submitted_at=data.get("submitted_at"),
+            approved_at=data.get("approved_at"),
+            returned_at=data.get("returned_at"),
+            created_at=data["created_at"],
+            updated_at=data["updated_at"]
+        )
+        grouped_goals[data["employee_name"]].append(goal)
+    return grouped_goals
