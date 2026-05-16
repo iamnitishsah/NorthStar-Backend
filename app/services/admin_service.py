@@ -1,0 +1,54 @@
+from datetime import datetime, UTC
+from bson import ObjectId
+from fastapi import HTTPException
+from app.constants.enums import GoalStatus
+from app.db.database import db
+from app.audit.logs import log_action
+
+goals = db.goals
+
+
+async def unlock_goal(goal_id: str, current_user: dict) -> tuple[bool, str]:
+    if not ObjectId.is_valid(goal_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid goal ID"
+        )
+
+    goal_data = await goals.find_one(
+        {"_id": ObjectId(goal_id)}
+    )
+
+    if not goal_data:
+        raise HTTPException(
+            status_code=404,
+            detail="Goal not found"
+        )
+
+    if goal_data["status"] != GoalStatus.LOCKED:
+        raise HTTPException(
+            status_code=400,
+            detail="Only LOCKED goals can be unlocked"
+        )
+
+    await goals.update_one(
+        {"_id": ObjectId(goal_id)},
+        {
+            "$set": {
+                "status": GoalStatus.RETURNED,
+                "updated_at": datetime.now(UTC)
+            }
+        }
+    )
+
+    await log_action(
+        user_id=current_user["_id"],
+        action="unlock_goal",
+        details={
+            "goal_id": goal_id,
+            "previous_status": GoalStatus.LOCKED,
+            "new_status": GoalStatus.RETURNED
+        }
+    )
+
+    return True, "Goal unlocked successfully"

@@ -1,11 +1,17 @@
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, Field
-from app.constants.enums import GoalStatus
+from app.constants.enums import GoalStatus, MeasurementType, UOMType
 
 
 class ViewGoalResponse(BaseModel):
     goal_id: str
+    thrust_area: str
+    uom_type: UOMType
+    measurement_type: MeasurementType
+    target_value: float
+    achievement_value: Optional[float] = None
+    progress_percentage: Optional[float] = None
     employee_name: str
     title: str
     description: Optional[str]
@@ -22,8 +28,15 @@ class ViewGoalResponse(BaseModel):
 
 
 class CreateGoalRequest(BaseModel):
+    thrust_area: str = Field(min_length=3, max_length=100)
     title: str = Field(min_length=3, max_length=100)
-    description: Optional[str] = Field(default=None, max_length=500)
+    description: Optional[str] = Field(
+        default=None,
+        max_length=500
+    )
+    uom_type: UOMType
+    measurement_type: MeasurementType
+    target_value: float = Field(gt=0)
     weightage: int = Field(ge=10, le=100)
     target_date: Optional[datetime]
 

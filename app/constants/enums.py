@@ -21,8 +21,13 @@ class GoalStatus(str, Enum):
     LOCKED = "LOCKED"
 
 
-class UoM(str, Enum):
+class UOMType(str, Enum):
+    NUMERIC = "NUMERIC"
+    PERCENTAGE = "PERCENTAGE"
+    TIMELINE = "TIMELINE"
+    ZERO_BASED = "ZERO_BASED"
+
+
+class MeasurementType(str, Enum):
     MIN = "MIN"
     MAX = "MAX"
-    TIMELINE = "TIMELINE"
-    ZERO = "ZERO"
