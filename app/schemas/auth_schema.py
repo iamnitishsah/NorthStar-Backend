@@ -16,7 +16,6 @@ class RegisterUserRequest(BaseModel):
     role: Role
     manager_id: Optional[str] = None
     password: str
-    is_active: bool = True
 
 
 class LoginUserRequest(BaseModel):
