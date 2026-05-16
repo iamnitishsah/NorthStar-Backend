@@ -34,8 +34,8 @@ async def my_goals(current_user: dict) -> List[ViewGoalResponse]:
             submitted_at=data.get("submitted_at"),
             approved_at=data.get("approved_at"),
             returned_at=data.get("returned_at"),
-        created_at=data["created_at"],
-        updated_at=data["updated_at"]
+            created_at=data["created_at"],
+            updated_at=data["updated_at"]
         )
         goals_list.append(goal)
     return goals_list
@@ -105,27 +105,61 @@ async def delete_goal(goal_id: str, current_user: dict, employee: dict) -> tuple
     return True, "Goal deleted successfully"
 
 
-async def submit_goal(current_user: dict, employee: dict) -> tuple[bool, str]:
-    employee_goals = await goals.find({"employee_id": current_user["employee_id"]}).to_list(length=None)
+async def submit_goals(goal_ids: list[str], current_user: dict) -> tuple[bool, str]:
+    employee_id = current_user["employee_id"]
 
-    if len(employee_goals) < 1 or len(employee_goals) > 8:
+    selected_goals = await goals.find(
+        {
+            "_id": {
+                "$in": [ObjectId(goal_id) for goal_id in goal_ids]
+            },
+            "employee_id": employee_id,
+            "status": {
+                "$in": [
+                    GoalStatus.DRAFT,
+                    GoalStatus.RETURNED
+                ]
+            }
+        }
+    ).to_list(length=None)
+
+    locked_goals = await goals.find(
+        {
+            "employee_id": employee_id,
+            "status": {"$in": [GoalStatus.LOCKED]}
+        }
+    ).to_list(length=None)
+
+
+    if len(selected_goals) < 1:
         raise HTTPException(
             status_code=400,
-            detail="You must have between 1 and 8 goals to submit for approval"
+            detail="Select at least one goal"
         )
 
-    total_weightage = sum(g["weightage"] for g in employee_goals)
+    if len(selected_goals)+len(locked_goals) > 8:
+        raise HTTPException(
+            status_code=400,
+            detail="Maximum 8 goals allowed including locked ones."
+        )
+
+    total_weightage = sum(
+        goal["weightage"]
+        for goal in selected_goals + locked_goals
+    )
 
     if total_weightage != 100:
         raise HTTPException(
             status_code=400,
             detail="Total goal weightage must equal 100"
         )
-    
+
+
     await goals.update_many(
         {
-            "employee_id": current_user["employee_id"],
-            "status": GoalStatus.DRAFT
+            "_id": {
+                "$in": [goal["_id"] for goal in selected_goals]
+            }
         },
         {
             "$set": {
@@ -136,16 +170,15 @@ async def submit_goal(current_user: dict, employee: dict) -> tuple[bool, str]:
         }
     )
 
-    return True, "Goal submitted successfully"
+    return True, "Goals submitted successfully"
 
 
 
 '''Service function for Manager to view, approve, or return employee goals'''
 async def view_goals(current_user: dict) -> dict[str, List[ViewGoalResponse]]:
-    employee_id = current_user["employee_id"]
-    manager_id = current_user["manager_id"]
-
-    goal_data = goals.find({"manager_id": manager_id}).sort("created_at", -1)
+    manager_id = current_user["employee_id"]
+    
+    goal_data = goals.find({"manager_id": manager_id,}).sort("created_at", -1)
 
     grouped_goals = defaultdict(list)
 
@@ -167,4 +200,65 @@ async def view_goals(current_user: dict) -> dict[str, List[ViewGoalResponse]]:
             updated_at=data["updated_at"]
         )
         grouped_goals[data["employee_name"]].append(goal)
-    return grouped_goals
+    
+    return dict(grouped_goals)
+
+
+async def approve_goal(goal_id: str, current_user: dict) -> tuple[bool, str]:
+    if not ObjectId.is_valid(goal_id):
+        raise HTTPException(status_code=400, detail="Invalid goal ID")
+    
+    goal_data = await goals.find_one({"_id": ObjectId(goal_id)})
+
+    if not goal_data:
+        raise HTTPException(status_code=404, detail="Goal not found")
+
+    if goal_data["manager_id"] != current_user["employee_id"]:
+        raise HTTPException(status_code=403, detail="Unauthorized to approve this goal")
+    
+    if goal_data["status"] != GoalStatus.SUBMITTED:
+        raise HTTPException(status_code=400, detail="Only SUBMITTED goals can be approved")
+
+    await goals.update_one(
+        {"_id": ObjectId(goal_id)},
+        {
+            "$set": {
+                "status": GoalStatus.LOCKED,
+                "manager_note": None,
+                "approver_id": current_user["employee_id"],
+                "approver_name": current_user["name"],
+                "approved_at": datetime.now(UTC),
+                "updated_at": datetime.now(UTC)
+            }
+        }
+    )
+    return True, "Goal approved successfully"
+
+
+async def return_goal(goal_id: str, payload: ReturnGoalRequest, current_user: dict) -> tuple[bool, str]:
+    if not ObjectId.is_valid(goal_id):
+        raise HTTPException(status_code=400, detail="Invalid goal ID")
+    
+    goal_data = await goals.find_one({"_id": ObjectId(goal_id)})
+
+    if not goal_data:
+        raise HTTPException(status_code=404, detail="Goal not found")
+
+    if goal_data["manager_id"] != current_user["employee_id"]:
+        raise HTTPException(status_code=403, detail="Unauthorized to return this goal")
+    
+    if goal_data["status"] != GoalStatus.SUBMITTED:
+        raise HTTPException(status_code=400, detail="Only SUBMITTED goals can be returned")
+
+    await goals.update_one(
+        {"_id": ObjectId(goal_id)},
+        {
+            "$set": {
+                "status": GoalStatus.RETURNED,
+                "manager_note": payload.manager_note,
+                "returned_at": datetime.now(UTC),
+                "updated_at": datetime.now(UTC)
+            }
+        }
+    )
+    return True, "Goal returned successfully"

@@ -4,7 +4,7 @@ from typing import List
 from app.dependencies.auth_dependency import get_current_user
 from app.dependencies.role_dependency import require_employee
 from app.schemas.goal_schema import CreateGoalRequest, UpdateGoalRequest, ReturnGoalRequest, ViewGoalResponse
-from app.services.goal_service import my_goals, create_goal, update_goal, delete_goal, submit_goal, view_goals
+from app.services.goal_service import my_goals, create_goal, update_goal, delete_goal, submit_goal, view_goals, approve_goal, return_goal
 
 router = APIRouter(prefix="/goals", tags=["Goals"])
 
@@ -73,3 +73,26 @@ async def view_goals_router(current_user: dict = Depends(get_current_user)):
     if not goals:
         raise HTTPException(status_code=404, detail="No goals found for review")
     return goals
+
+
+@router.post("/{goal_id}/approve", response_model=dict)
+async def approve_goal_router(
+    goal_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    success, message = await approve_goal(goal_id, current_user)
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+    return {"message": "Goal approved successfully"}
+
+
+@router.post("/{goal_id}/return", response_model=dict)
+async def return_goal_router(
+    goal_id: str,
+    payload: ReturnGoalRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    success, message = await return_goal(goal_id, payload, current_user)
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+    return {"message": "Goal returned successfully"}
