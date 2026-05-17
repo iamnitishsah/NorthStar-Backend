@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, UTC
 from app.db.database import db
 from app.core.security import hash_password, verify_password
 from app.models.user_model import User
@@ -10,7 +10,7 @@ users = db.users
 
 
 async def register_user(payload: RegisterUserRequest):
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     email = payload.email.strip().lower()
     await users.create_index("email", unique=True)
     await users.create_index("employee_id", unique=True)
@@ -40,7 +40,7 @@ async def register_user(payload: RegisterUserRequest):
 
 
 async def login_user(payload: LoginUserRequest):
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
 
     email = payload.email.strip().lower()
     employee_id = payload.employee_id.strip() if payload.employee_id else None

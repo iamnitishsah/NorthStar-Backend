@@ -7,8 +7,8 @@ load_dotenv()
 
 class Settings:
     GATEWAY_PORT: int = int(os.getenv("GATEWAY_PORT", 8000))
-    JWT_SECRET: str = "NorthStarSecretKey"
-    JWT_REFRESH_SECRET: str = "NorthStarRefreshSecretKey"
+    JWT_SECRET: str = os.getenv("JWT_SECRET", "NorthStarSecretKey")
+    JWT_REFRESH_SECRET: str = os.getenv("JWT_REFRESH_SECRET", "NorthStarRefreshSecretKey")
     ACCESS_TOKEN_EXPIRE= timedelta(minutes=60)
     REFRESH_TOKEN_EXPIRE= timedelta(days=7)
     MONGO_URI: str = os.getenv("MONGO_URI", "mongodb://localhost:27017/")

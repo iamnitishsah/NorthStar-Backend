@@ -31,8 +31,8 @@ async def review_goals_router(current_user: dict = Depends(get_current_user), ma
 
 
 @router.post("/{goal_id}/approve", response_model=dict)
-async def approve_goal_router(goal_id: str, current_user: dict = Depends(get_current_user), manager = Depends(require_manager)):
-    success, message = await approve_goal(goal_id, current_user)
+async def approve_goal_router(goal_id: str, tweaks: dict = None, current_user: dict = Depends(get_current_user), manager = Depends(require_manager)):
+    success, message = await approve_goal(goal_id, tweaks, current_user)
 
     if not success:
         raise HTTPException(
@@ -71,8 +71,8 @@ async def view_goals_router(current_user: dict = Depends(get_current_user), mana
 
 
 @router.post("/{goal_id}/comment", response_model=dict)
-async def comment_on_goal_router(goal_id: str, comment: str, current_user: dict = Depends(get_current_user), manager = Depends(require_manager)):
-    success, message = await comment_on_goal(goal_id, comment, current_user)
+async def comment_on_goal_router(goal_id: str, quarter: int, comment: str, current_user: dict = Depends(get_current_user), manager = Depends(require_manager)):
+    success, message = await comment_on_goal(goal_id, quarter, comment, current_user)
 
     if not success:
         raise HTTPException(

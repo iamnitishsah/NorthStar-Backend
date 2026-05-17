@@ -5,14 +5,16 @@ from app.dependencies.role_dependency import require_employee
 from app.schemas.goal_schema import (
     CreateGoalRequest,
     UpdateGoalRequest,
-    ViewGoalResponse
+    ViewGoalResponse,
+    QuarterlyCheckinRequest
 )
 from app.services.employee_service import (
     my_goals,
     create_goal,
     update_goal,
     delete_goal,
-    submit_goals
+    submit_goals,
+    quarterly_checkin
 )
 
 router = APIRouter(prefix="/employee/goals", tags=["Employee APIs"])
@@ -24,12 +26,6 @@ async def my_goals_router(
 ):
 
     goal = await my_goals(current_user)
-
-    if not goal:
-        raise HTTPException(
-            status_code=404,
-            detail="Goal not found"
-        )
 
     return goal
 
@@ -109,6 +105,20 @@ async def submit_goal_router(
         goal_ids,
         current_user
     )
+
+    if not success:
+        raise HTTPException(
+            status_code=400,
+            detail=message
+        )
+
+    return {"message": message}
+
+
+
+@router.patch("/{goal_id}/quarterly-checkin", response_model=dict)
+async def quarterly_checkin_router(goal_id: str, payload: QuarterlyCheckinRequest, current_user: dict = Depends(get_current_user)):
+    success, message = await quarterly_checkin(goal_id, payload, current_user)
 
     if not success:
         raise HTTPException(

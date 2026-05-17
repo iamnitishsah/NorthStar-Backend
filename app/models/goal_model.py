@@ -1,14 +1,18 @@
 from datetime import datetime, UTC
-from typing import Optional
-
+from typing import Optional, Dict
 from pydantic import BaseModel, Field
-
 from app.constants.enums import (
     GoalStatus,
     UOMType,
-    MeasurementType
+    MeasurementType,
+    ProgressStatus
 )
 
+
+class CheckinParams(BaseModel):
+    achievement_value: float = Field(gt=0)
+    progress_status: ProgressStatus
+    manager_note: Optional[str] = None
 
 class Goal(BaseModel):
     employee_id: str
@@ -28,9 +32,8 @@ class Goal(BaseModel):
     approver_name: Optional[str] = None
     is_shared: bool = False
     primary_owner_id: Optional[str] = None
-    achievement_value: Optional[float] = None
     progress_percentage: Optional[float] = None
-
+    quarter: Dict[str, CheckinParams] = Field(default_factory=dict)
     submitted_at: Optional[datetime] = None
     approved_at: Optional[datetime] = None
     returned_at: Optional[datetime] = None

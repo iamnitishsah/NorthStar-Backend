@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict
 from pydantic import BaseModel, Field
-from app.constants.enums import GoalStatus, MeasurementType, UOMType
+from app.constants.enums import GoalStatus, MeasurementType, ProgressStatus, UOMType
 
 
 class ViewGoalResponse(BaseModel):
@@ -11,6 +11,7 @@ class ViewGoalResponse(BaseModel):
     measurement_type: MeasurementType
     target_value: float
     achievement_value: Optional[float] = None
+    progress_status: Optional[ProgressStatus] = None
     progress_percentage: Optional[float] = None
     employee_name: str
     title: str
@@ -34,6 +35,7 @@ class CreateGoalRequest(BaseModel):
         default=None,
         max_length=500
     )
+    progress_status: Optional[ProgressStatus] = ProgressStatus.NOT_STARTED
     uom_type: UOMType
     measurement_type: MeasurementType
     target_value: float = Field(gt=0)
@@ -54,3 +56,12 @@ class UpdateGoalRequest(BaseModel):
 
 class ReturnGoalRequest(BaseModel):
     manager_note: Optional[str] = None
+
+
+class CheckinParams(BaseModel):
+    achievement_value: Optional[float] = Field(ge=0)
+    progress_status: ProgressStatus 
+
+
+class QuarterlyCheckinRequest(BaseModel):
+    quarter: Dict[str, CheckinParams]

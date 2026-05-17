@@ -7,7 +7,6 @@ from app.routes.auth_routes import router as auth_router
 from app.routes.employee_router import router as employee_goal_router
 from app.routes.manager_router import router as manager_goal_router
 from app.routes.admin_router import router as admin_goal_router
-from app.routes.achievement_router import router as achievement_router
 from app.routes.organization_routes import router as organization_router
 
 app = FastAPI(
@@ -29,7 +28,6 @@ app.include_router(organization_router)
 app.include_router(employee_goal_router)
 app.include_router(manager_goal_router)
 app.include_router(admin_goal_router)
-app.include_router(achievement_router)
 
 
 app.add_middleware(

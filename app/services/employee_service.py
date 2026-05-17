@@ -2,13 +2,14 @@ from datetime import datetime, UTC
 from typing import List
 from bson import ObjectId
 from fastapi import HTTPException
-from app.constants.enums import GoalStatus
+from app.constants.enums import GoalStatus, ProgressStatus, UOMType, MeasurementType
 from app.db.database import db
 from app.models.goal_model import Goal
 from app.schemas.goal_schema import (
     CreateGoalRequest,
     UpdateGoalRequest,
-    ViewGoalResponse
+    ViewGoalResponse,
+    QuarterlyCheckinRequest
 )
 from app.audit.logs import log_action
 
@@ -70,7 +71,8 @@ async def create_goal(payload: CreateGoalRequest, current_user: dict, employee: 
         target_value=payload.target_value,
         weightage=payload.weightage,
         target_date=payload.target_date,
-        status=GoalStatus.DRAFT
+        status=GoalStatus.DRAFT,
+        progress_status=ProgressStatus.NOT_STARTED
     )
 
     result = await goals.insert_one(goal.model_dump())
@@ -218,13 +220,22 @@ async def submit_goals(goal_ids: list[str], current_user: dict) -> tuple[bool, s
         }
     ).to_list(length=None)
 
+    submitted_goals = await goals.find(
+        {
+            "employee_id": employee_id,
+            "status": {
+                "$in": [GoalStatus.SUBMITTED]
+            }
+        }
+    ).to_list(length=None)
+
     if len(selected_goals) < 1:
         raise HTTPException(
             status_code=400,
             detail="Select at least one goal"
         )
 
-    if len(selected_goals) + len(locked_goals) > 8:
+    if len(selected_goals) + len(locked_goals) + len(submitted_goals) > 8:
         raise HTTPException(
             status_code=400,
             detail="Maximum 8 goals allowed including locked goals"
@@ -232,7 +243,7 @@ async def submit_goals(goal_ids: list[str], current_user: dict) -> tuple[bool, s
 
     total_weightage = sum(
         goal["weightage"]
-        for goal in selected_goals + locked_goals
+        for goal in selected_goals + locked_goals + submitted_goals
     )
 
     if total_weightage != 100:
@@ -266,3 +277,127 @@ async def submit_goals(goal_ids: list[str], current_user: dict) -> tuple[bool, s
     )
 
     return True, "Goals submitted successfully"
+
+
+
+async def quarterly_checkin(goal_id: str, payload: QuarterlyCheckinRequest, current_user: dict) -> tuple[bool, str]:
+    if not ObjectId.is_valid(goal_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid goal ID"
+        )
+
+    goal_data = await goals.find_one({"_id": ObjectId(goal_id)})
+
+    if not goal_data:
+        raise HTTPException(
+            status_code=404,
+            detail="Goal not found"
+        )
+
+    if goal_data["employee_id"] != current_user["employee_id"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Unauthorized to update this goal"
+        )
+
+    if goal_data["status"] != GoalStatus.LOCKED:
+        raise HTTPException(
+            status_code=400,
+            detail="Only LOCKED goals can be updated in quarterly check-in"
+        )
+
+    target_value = goal_data["target_value"]
+    measurement_type = goal_data["measurement_type"]
+    uom_type = goal_data["uom_type"]
+
+    quarterly_data = {}
+
+    for quarter, checkin in payload.quarter.items():
+
+        achievement_value = checkin.achievement_value
+
+        if uom_type in [UOMType.PERCENTAGE, UOMType.NUMERIC]:
+
+            if achievement_value < 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Achievement value must be positive"
+                )
+
+            if measurement_type == MeasurementType.MIN:
+                progress_percentage = (
+                    achievement_value / target_value
+                ) * 100
+
+            elif measurement_type == MeasurementType.MAX:
+
+                if achievement_value == 0:
+                    progress_percentage = 100
+                else:
+                    progress_percentage = (
+                        target_value / achievement_value
+                    ) * 100
+
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid measurement type"
+                )
+
+        elif uom_type == UOMType.ZERO_BASED:
+
+            if achievement_value < 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Achievement value must be positive"
+                )
+
+            progress_percentage = (
+                100 if achievement_value == 0 else 0
+            )
+
+        elif uom_type == UOMType.TIMELINE:
+
+            if achievement_value < 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Achievement value must be positive"
+                )
+
+            progress_percentage = achievement_value
+
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid UoM type"
+            )
+
+        quarterly_data[str(quarter)] = {
+            "achievement_value": achievement_value,
+            "progress_status": checkin.progress_status,
+            "progress_percentage": progress_percentage,
+            "updated_at": datetime.now(UTC)
+        }
+
+    await goals.update_one(
+        {"_id": ObjectId(goal_id)},
+        {
+            "$set": {
+                "progress_percentage": progress_percentage,
+                "quarter": quarterly_data,
+                "updated_at": datetime.now(UTC)
+            }
+        }
+    )
+
+    await log_action(
+        user_id=current_user["employee_id"],
+        action="QUARTERLY_CHECKIN",
+        details={
+            "goal_id": goal_id,
+            "quarters_updated": list(payload.quarter.keys())
+        }
+    )
+
+    return True, "Quarterly check-in updated successfully"

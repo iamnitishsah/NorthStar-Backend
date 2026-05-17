@@ -64,7 +64,7 @@ async def review_goals(current_user: dict) -> dict[str, List[ViewGoalResponse]]:
     return dict(grouped_goals)
 
 
-async def approve_goal(goal_id: str, current_user: dict) -> tuple[bool, str]:
+async def approve_goal(goal_id: str, tweaks: dict, current_user: dict) -> tuple[bool, str]:
 
     if not ObjectId.is_valid(goal_id):
         raise HTTPException(
@@ -93,12 +93,18 @@ async def approve_goal(goal_id: str, current_user: dict) -> tuple[bool, str]:
             status_code=400,
             detail="Only SUBMITTED goals can be approved"
         )
+    
+    if tweaks:
+        target_value = tweaks.get("target_value")
+        weightage = tweaks.get("weightage")
 
     await goals.update_one(
         {"_id": ObjectId(goal_id)},
         {
             "$set": {
                 "status": GoalStatus.LOCKED,
+                "target_value": target_value if tweaks and target_value is not None else goal_data["target_value"],
+                "weightage": weightage if tweaks and weightage is not None else goal_data["weightage"],
 
                 "manager_note": None,
 
@@ -232,15 +238,24 @@ async def view_goals(current_user: dict) -> dict[str, List[ViewGoalResponse]]:
     return dict(grouped_goals)
 
 
-
-async def comment_on_goal(goal_id: str, comment: str, current_user: dict) -> tuple[bool, str]:
+async def comment_on_goal(goal_id: str, quarter: int, comment: str, current_user: dict) -> tuple[bool, str]:
     if not ObjectId.is_valid(goal_id):
         raise HTTPException(
             status_code=400,
             detail="Invalid goal ID"
         )
 
-    goal_data = await goals.find_one({"_id": ObjectId(goal_id)})
+
+    if quarter not in [1, 2, 3, 4]:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid quarter"
+        )
+
+
+    goal_data = await goals.find_one(
+        {"_id": ObjectId(goal_id)}
+    )
 
     if not goal_data:
         raise HTTPException(
@@ -254,25 +269,37 @@ async def comment_on_goal(goal_id: str, comment: str, current_user: dict) -> tup
             detail="Unauthorized to comment on this goal"
         )
 
+    quarter_data = goal_data.get("quarter", {})
+
+    if str(quarter) not in quarter_data:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Q{quarter} check-in not found"
+        )
+
+
     await goals.update_one(
         {"_id": ObjectId(goal_id)},
         {
             "$set": {
-                "manager_note": comment,
+                f"quarter.{quarter}.manager_note": comment,
                 "updated_at": datetime.now(UTC)
             }
         }
     )
+
 
     await log_action(
         user_id=current_user["employee_id"],
         action="COMMENT_ON_GOAL",
         details={
             "goal_id": goal_id,
+            "quarter": quarter,
             "employee_id": goal_data["employee_id"],
             "employee_name": goal_data["employee_name"],
             "comment": comment
         }
     )
 
-    return True, "Comment added successfully"
+    return True, f"Comment added for Q{quarter}"
+

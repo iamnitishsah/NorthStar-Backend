@@ -1,10 +1,10 @@
-from datetime import datetime
+from datetime import datetime, UTC
 from jose import jwt
 from app.core.config import config
 
 
 def create_access_token(employee_id: str, role: str, designation: str, department: str):
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     payload = {
         "sub": str(employee_id),
         "role": role,
@@ -18,7 +18,7 @@ def create_access_token(employee_id: str, role: str, designation: str, departmen
 
 
 def create_refresh_token(employee_id: str):
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     payload = {
         "sub": str(employee_id),
         "iat": now,
