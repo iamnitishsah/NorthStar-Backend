@@ -593,7 +593,9 @@ Submit a batch of goals for manager review. This triggers the 100% weightage val
 
 #### `PATCH /employee/goals/{goal_id}/quarterly-checkin`
 
-Log quarterly achievement for a `LOCKED` goal. Progress percentage is auto-computed per the goal's UoM and measurement type. Multiple quarters can be updated in a single request.
+Log quarterly achievement for a `LOCKED` goal. Progress percentage is auto-computed per the goal's UoM and measurement type. Multiple quarters can be updated in a single request **only if they are sequential and start at the next required quarter**.
+
+Quarter updates are appended without overwriting existing quarters; previously submitted quarters remain intact.
 
 If the goal is a shared goal and the authenticated user is the `primary_owner`, achievement data is automatically synced to all other locked copies of the same shared goal.
 
@@ -1070,6 +1072,8 @@ Returns the full organization hierarchy as a recursive tree, built dynamically f
 - Employee must be the owner of the goal
 - Progress percentage is auto-computed — see formula table below
 - For shared goals: only the `primary_owner` triggers achievement sync to linked copies
+- Quarter updates must be sequential (Q1 → Q2 → Q3 → Q4); skipping ahead is not allowed
+- Previously submitted quarters remain stored and are not overwritten
 
 ---
 

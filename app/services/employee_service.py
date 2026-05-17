@@ -370,6 +370,57 @@ async def quarterly_checkin(goal_id: str, payload: QuarterlyCheckinRequest, curr
     quarterly_data = {}
     progress_by_quarter = {}
 
+    existing_quarters = goal_data.get("quarter", {}) or {}
+    existing_quarter_keys = []
+    for key in existing_quarters.keys():
+        try:
+            existing_quarter_keys.append(int(key))
+        except (TypeError, ValueError):
+            continue
+    max_existing_quarter = max(existing_quarter_keys) if existing_quarter_keys else 0
+
+    incoming_quarters = []
+    for key in payload.quarter.keys():
+        try:
+            incoming_quarters.append(int(key))
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=400,
+                detail="Quarter keys must be numeric between 1 and 4"
+            )
+
+    if not incoming_quarters:
+        raise HTTPException(
+            status_code=400,
+            detail="At least one quarter update is required"
+        )
+
+    if any(q not in [1, 2, 3, 4] for q in incoming_quarters):
+        raise HTTPException(
+            status_code=400,
+            detail="Quarter must be between 1 and 4"
+        )
+
+    if len(set(incoming_quarters)) != len(incoming_quarters):
+        raise HTTPException(
+            status_code=400,
+            detail="Duplicate quarter updates are not allowed"
+        )
+
+    min_incoming = min(incoming_quarters)
+    if min_incoming != max_existing_quarter + 1:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Next update must be Q{max_existing_quarter + 1}"
+        )
+
+    sorted_incoming = sorted(incoming_quarters)
+    if sorted_incoming != list(range(min_incoming, min_incoming + len(sorted_incoming))):
+        raise HTTPException(
+            status_code=400,
+            detail="Quarter updates must be sequential without gaps"
+        )
+
     for quarter, checkin in payload.quarter.items():
 
         achievement_value = checkin.achievement_value
@@ -478,16 +529,22 @@ async def quarterly_checkin(goal_id: str, payload: QuarterlyCheckinRequest, curr
 
         progress_by_quarter[str(quarter)] = progress_percentage
 
+    combined_quarters = {**existing_quarters, **quarterly_data}
+    combined_progress = {
+        **{k: v.get("progress_percentage") for k, v in existing_quarters.items()},
+        **progress_by_quarter,
+    }
+
     try:
         latest_quarter_key = max(
-            progress_by_quarter.keys(),
+            combined_progress.keys(),
             key=lambda key: int(key)
         )
     except ValueError:
-        latest_quarter_key = list(progress_by_quarter.keys())[-1]
+        latest_quarter_key = list(combined_progress.keys())[-1]
 
-    latest_progress_percentage = progress_by_quarter[latest_quarter_key]
-    latest_achievement_value = quarterly_data[latest_quarter_key]["achievement_value"]
+    latest_progress_percentage = combined_progress[latest_quarter_key]
+    latest_achievement_value = combined_quarters[latest_quarter_key]["achievement_value"]
 
     await goals.update_one(
         {"_id": ObjectId(goal_id)},
@@ -495,8 +552,8 @@ async def quarterly_checkin(goal_id: str, payload: QuarterlyCheckinRequest, curr
             "$set": {
                 "achievement_value": latest_achievement_value,
                 "progress_percentage": latest_progress_percentage,
-                "quarter": quarterly_data,
-                "updated_at": datetime.now(UTC)
+                "updated_at": datetime.now(UTC),
+                **{f"quarter.{key}": value for key, value in quarterly_data.items()}
             }
         }
     )
