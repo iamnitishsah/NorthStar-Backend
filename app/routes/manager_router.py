@@ -4,7 +4,8 @@ from app.dependencies.auth_dependency import get_current_user
 from app.dependencies.role_dependency import require_manager
 from app.schemas.goal_schema import (
     ReturnGoalRequest,
-    ViewGoalResponse
+    ViewGoalResponse,
+    CommentGoalRequest
 )
 from app.services.manager_service import (
     review_goals,
@@ -71,8 +72,8 @@ async def view_goals_router(current_user: dict = Depends(get_current_user), mana
 
 
 @router.post("/{goal_id}/comment", response_model=dict)
-async def comment_on_goal_router(goal_id: str, quarter: int, comment: str, current_user: dict = Depends(get_current_user), manager = Depends(require_manager)):
-    success, message = await comment_on_goal(goal_id, quarter, comment, current_user)
+async def comment_on_goal_router(goal_id: str, payload: CommentGoalRequest, current_user: dict = Depends(get_current_user), manager = Depends(require_manager)):
+    success, message = await comment_on_goal(goal_id, payload.quarter, payload.comment, current_user)
 
     if not success:
         raise HTTPException(

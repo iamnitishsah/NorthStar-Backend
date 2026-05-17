@@ -96,17 +96,27 @@ async def approve_goal(goal_id: str, tweaks: dict, current_user: dict) -> tuple[
             detail="Only SUBMITTED goals can be approved"
         )
     
-    if tweaks:
-        target_value = tweaks.get("target_value")
-        weightage = tweaks.get("weightage")
+    target_value = goal_data["target_value"]
+    weightage = goal_data["weightage"]
+    if tweaks is not None:
+        if "target_value" in tweaks and tweaks["target_value"] is not None:
+            target_value = tweaks["target_value"]
+        if "weightage" in tweaks and tweaks["weightage"] is not None:
+            weightage = tweaks["weightage"]
+
+    if weightage < 10 or weightage > 100:
+        raise HTTPException(
+            status_code=400,
+            detail="Weightage must be between 10 and 100"
+        )
 
     await goals.update_one(
         {"_id": ObjectId(goal_id)},
         {
             "$set": {
                 "status": GoalStatus.LOCKED,
-                "target_value": target_value if tweaks and target_value is not None else goal_data["target_value"],
-                "weightage": weightage if tweaks and weightage is not None else goal_data["weightage"],
+                "target_value": target_value,
+                "weightage": weightage,
 
                 "manager_note": None,
 
@@ -306,4 +316,3 @@ async def comment_on_goal(goal_id: str, quarter: int, comment: str, current_user
     )
 
     return True, f"Comment added for Q{quarter}"
-

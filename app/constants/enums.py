@@ -18,6 +18,7 @@ class GoalStatus(str, Enum):
     DRAFT = "DRAFT"
     SUBMITTED = "SUBMITTED"
     RETURNED = "RETURNED"
+    ADMIN_UNLOCKED = "ADMIN_UNLOCKED"
     LOCKED = "LOCKED"
 
 

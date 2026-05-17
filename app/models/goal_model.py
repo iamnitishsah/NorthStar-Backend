@@ -1,6 +1,6 @@
 from datetime import datetime, UTC
-from typing import Optional, Dict
-from pydantic import BaseModel, Field
+from typing import Optional, Dict, Union
+from pydantic import BaseModel, Field, validator
 from app.constants.enums import (
     GoalStatus,
     UOMType,
@@ -10,9 +10,15 @@ from app.constants.enums import (
 
 
 class CheckinParams(BaseModel):
-    achievement_value: float = Field(gt=0)
+    achievement_value: Union[float, str]
     progress_status: ProgressStatus
     manager_note: Optional[str] = None
+
+    @validator("achievement_value")
+    def validate_achievement_value(cls, value):
+        if isinstance(value, (int, float)) and value < 0:
+            raise ValueError("achievement_value must be >= 0")
+        return value
 
 class Goal(BaseModel):
     employee_id: str

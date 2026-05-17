@@ -36,7 +36,7 @@ async def unlock_goal(goal_id: str, current_user: dict) -> tuple[bool, str]:
         {"_id": ObjectId(goal_id)},
         {
             "$set": {
-                "status": GoalStatus.RETURNED,
+                "status": GoalStatus.ADMIN_UNLOCKED,
                 "updated_at": datetime.now(UTC)
             }
         }
@@ -48,7 +48,7 @@ async def unlock_goal(goal_id: str, current_user: dict) -> tuple[bool, str]:
         details={
             "goal_id": goal_id,
             "previous_status": GoalStatus.LOCKED,
-            "new_status": GoalStatus.RETURNED
+            "new_status": GoalStatus.ADMIN_UNLOCKED
         }
     )
 
@@ -60,7 +60,7 @@ async def view_logs(action_filter: str = None, user_id_filter: str = None) -> li
     if action_filter:
         query["action"] = action_filter
     if user_id_filter:
-        query["user_id"] = ObjectId(user_id_filter)
+        query["user_id"] = user_id_filter
 
     logs_cursor = logs.find(query).sort("timestamp", -1).limit(100)
     logs_list = []

@@ -1,4 +1,4 @@
-from datetime import datetime, UTC
+from datetime import datetime, UTC, date
 from typing import List
 from bson import ObjectId
 from fastapi import HTTPException
@@ -19,7 +19,7 @@ goals = db.goals
 async def my_goals(current_user: dict) -> List[ViewGoalResponse]:
     employee_id = current_user["employee_id"]
     goal_data = goals.find(
-        {"employee_id": employee_id}
+        {"employee_id": employee_id, "is_shared": {"$ne": True}}
     ).sort("created_at", -1)
 
     goals_list = []
@@ -60,6 +60,26 @@ async def create_goal(payload: CreateGoalRequest, current_user: dict, employee: 
     employee_id = current_user["employee_id"]
     employee_name = current_user["name"]
     manager_id = employee["manager_id"]
+
+    existing_count = await goals.count_documents(
+        {
+            "employee_id": employee_id,
+            "status": {
+                "$in": [
+                    GoalStatus.DRAFT,
+                    GoalStatus.RETURNED,
+                    GoalStatus.ADMIN_UNLOCKED,
+                    GoalStatus.SUBMITTED,
+                    GoalStatus.LOCKED,
+                ]
+            },
+        }
+    )
+    if existing_count >= 8:
+        raise HTTPException(
+            status_code=400,
+            detail="Maximum 8 goals allowed per employee"
+        )
 
     goal = Goal(
         employee_id=employee_id,
@@ -114,14 +134,14 @@ async def update_goal(goal_id: str, payload: UpdateGoalRequest, current_user: di
             detail="Unauthorized to update this goal"
         )
 
-    if goal_data["status"] not in [GoalStatus.DRAFT, GoalStatus.RETURNED]:
+    if goal_data["status"] not in [GoalStatus.DRAFT, GoalStatus.RETURNED, GoalStatus.ADMIN_UNLOCKED]:
         raise HTTPException(
             status_code=400,
             detail="Only DRAFT or RETURNED goals can be updated"
         )
     
     if goal_data.get("is_shared"):
-        restricted = {k: v for k, v in payload.model_dump().items() if v is not None and k in ["title", "uom_type", "measurement_type", "target_value", "thrust_area"]}
+        restricted = {k: v for k, v in payload.model_dump().items() if v is not None and k in ["title", "uom_type", "measurement_type", "target_value", "thrust_area", "weightage"]}
         if restricted:
             raise HTTPException(
                 status_code=403,
@@ -213,7 +233,8 @@ async def submit_goals(goal_ids: list[str], current_user: dict) -> tuple[bool, s
             "status": {
                 "$in": [
                     GoalStatus.DRAFT,
-                    GoalStatus.RETURNED
+                    GoalStatus.RETURNED,
+                    GoalStatus.ADMIN_UNLOCKED,
                 ]
             }
         }
@@ -229,22 +250,48 @@ async def submit_goals(goal_ids: list[str], current_user: dict) -> tuple[bool, s
         }
     ).to_list(length=None)
 
-    submitted_goals = await goals.find(
-        {
-            "employee_id": employee_id,
-            "status": {
-                "$in": [GoalStatus.SUBMITTED]
-            }
-        }
-    ).to_list(length=None)
-
     if len(selected_goals) < 1:
         raise HTTPException(
             status_code=400,
             detail="Select at least one goal"
         )
 
-    if len(selected_goals) + len(locked_goals) + len(submitted_goals) > 8:
+    invalid_weightage = [goal for goal in selected_goals if goal.get("weightage", 0) < 10]
+    if invalid_weightage:
+        raise HTTPException(
+            status_code=400,
+            detail="Each submitted goal must have minimum weightage of 10"
+        )
+
+    invalid_shared = []
+    shared_fields = [
+        "thrust_area",
+        "title",
+        "description",
+        "uom_type",
+        "measurement_type",
+        "target_value",
+        "target_date",
+    ]
+    for goal in selected_goals:
+        if not goal.get("is_shared"):
+            continue
+        snapshot = goal.get("source_snapshot")
+        if not snapshot:
+            continue
+        if any(goal.get(field) != snapshot.get(field) for field in shared_fields):
+            invalid_shared.append(str(goal["_id"]))
+
+    if invalid_shared:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "Shared goal fields must match the original shared goal",
+                "goal_ids": invalid_shared,
+            }
+        )
+
+    if len(selected_goals) + len(locked_goals) > 8:
         raise HTTPException(
             status_code=400,
             detail="Maximum 8 goals allowed including locked goals"
@@ -252,7 +299,7 @@ async def submit_goals(goal_ids: list[str], current_user: dict) -> tuple[bool, s
 
     total_weightage = sum(
         goal["weightage"]
-        for goal in selected_goals + locked_goals + submitted_goals
+        for goal in selected_goals + locked_goals
     )
 
     if total_weightage != 100:
@@ -320,12 +367,6 @@ async def quarterly_checkin(goal_id: str, payload: QuarterlyCheckinRequest, curr
     measurement_type = goal_data["measurement_type"]
     uom_type = goal_data["uom_type"]
 
-    if not payload.quarter:
-        raise HTTPException(
-            status_code=400,
-            detail="At least one quarter update is required"
-        )
-
     quarterly_data = {}
     progress_by_quarter = {}
 
@@ -374,16 +415,53 @@ async def quarterly_checkin(goal_id: str, payload: QuarterlyCheckinRequest, curr
             )
 
         elif uom_type == UOMType.TIMELINE:
-
-            if achievement_value < 0:
+            target_date = goal_data.get("target_date")
+            if not target_date:
                 raise HTTPException(
                     status_code=400,
-                    detail="Achievement value must be positive"
+                    detail="Target date is required for TIMELINE goals"
                 )
 
-            progress_percentage = (
-                achievement_value / target_value
-            ) * 100
+            if isinstance(achievement_value, datetime):
+                completion_date = achievement_value.date()
+            elif isinstance(achievement_value, date):
+                completion_date = achievement_value
+            elif isinstance(achievement_value, str):
+                try:
+                    completion_date = (
+                        datetime.fromisoformat(achievement_value).date()
+                        if "T" in achievement_value
+                        else date.fromisoformat(achievement_value)
+                    )
+                except ValueError:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Invalid completion date format; use ISO YYYY-MM-DD"
+                    )
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Completion date must be an ISO date string"
+                )
+
+            deadline_date = (
+                target_date.date() if isinstance(target_date, datetime) else target_date
+            )
+            start_date = goal_data.get("created_at")
+            start_date = start_date.date() if isinstance(start_date, datetime) else start_date
+            if not start_date:
+                start_date = deadline_date
+
+            if completion_date <= deadline_date:
+                progress_percentage = 100
+            else:
+                total_days = (deadline_date - start_date).days
+                if total_days <= 0:
+                    total_days = 1
+                days_late = (completion_date - deadline_date).days
+                progress_percentage = max(0, 100 - (days_late / total_days) * 100)
+
+            achievement_value = completion_date.isoformat()
 
         else:
             raise HTTPException(
@@ -415,6 +493,7 @@ async def quarterly_checkin(goal_id: str, payload: QuarterlyCheckinRequest, curr
         {"_id": ObjectId(goal_id)},
         {
             "$set": {
+                "achievement_value": latest_achievement_value,
                 "progress_percentage": latest_progress_percentage,
                 "quarter": quarterly_data,
                 "updated_at": datetime.now(UTC)

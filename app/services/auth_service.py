@@ -12,8 +12,6 @@ users = db.users
 async def register_user(payload: RegisterUserRequest):
     now = datetime.now(UTC)
     email = payload.email.strip().lower()
-    await users.create_index("email", unique=True)
-    await users.create_index("employee_id", unique=True)
 
     encrypted = hash_password(payload.password)
 

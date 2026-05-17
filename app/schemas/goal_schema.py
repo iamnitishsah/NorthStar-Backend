@@ -1,6 +1,6 @@
 from datetime import datetime
-from typing import Any, Optional, Dict
-from pydantic import BaseModel, Field
+from typing import Any, Optional, Dict, Union
+from pydantic import BaseModel, Field, validator
 from app.constants.enums import GoalStatus, MeasurementType, ProgressStatus, UOMType
 
 
@@ -10,11 +10,10 @@ class ViewGoalResponse(BaseModel):
     uom_type: UOMType
     measurement_type: MeasurementType
     target_value: float
-    achievement_value: Optional[float] = None
+    achievement_value: Optional[Union[float, str]] = None
     progress_status: Optional[ProgressStatus] = None
     progress_percentage: Optional[float] = None
     quarter: Dict[str, Any] = {}
-    progress_status: Optional[ProgressStatus] = None
     employee_name: str
     title: str
     description: Optional[str]
@@ -60,9 +59,22 @@ class ReturnGoalRequest(BaseModel):
     manager_note: Optional[str] = None
 
 
+class CommentGoalRequest(BaseModel):
+    quarter: int
+    comment: str
+
+
 class CheckinParams(BaseModel):
-    achievement_value: Optional[float] = Field(ge=0)
-    progress_status: ProgressStatus 
+    achievement_value: Optional[Union[float, str]] = None
+    progress_status: ProgressStatus
+
+    @validator("achievement_value")
+    def validate_achievement_value(cls, value):
+        if value is None:
+            return value
+        if isinstance(value, (int, float)) and value < 0:
+            raise ValueError("achievement_value must be >= 0")
+        return value
 
 
 class QuarterlyCheckinRequest(BaseModel):

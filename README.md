@@ -1002,7 +1002,7 @@ Progress percentage is computed automatically during quarterly check-in based on
 | `NUMERIC` / `PERCENTAGE` | `MAX` | Lower is better (e.g. TAT, Cost) | `(target / achievement) × 100` |
 | `NUMERIC` / `PERCENTAGE` | `MAX` | Achievement is zero (perfect) | `100%` |
 | `ZERO_BASED` | — | Zero = Success (e.g. Safety incidents) | `achievement == 0 → 100%, else 0%` |
-| `TIMELINE` | — | Date-based completion | `(achievement / target) × 100` |
+| `TIMELINE` | — | Date-based completion | `achievement_value` used directly as % |
 
 > Note: Progress percentage is a **tracking metric only** — it is not used for formal ratings.
 

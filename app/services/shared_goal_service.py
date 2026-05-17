@@ -69,6 +69,57 @@ async def push_shared_goal(payload: PushSharedGoalRequest, current_user: dict) -
             detail=f"These employee IDs were not found or are not active employees: {sorted(missing)}",
         )
 
+    status_filter = {
+        "$in": [
+            GoalStatus.DRAFT,
+            GoalStatus.RETURNED,
+            GoalStatus.ADMIN_UNLOCKED,
+            GoalStatus.SUBMITTED,
+            GoalStatus.LOCKED,
+        ]
+    }
+    existing_goals = await goals.find(
+        {
+            "employee_id": {"$in": recipient_ids},
+            "status": status_filter,
+        },
+        {"employee_id": 1, "weightage": 1},
+    ).to_list(length=None)
+
+    weightage_by_employee: dict[str, int] = {}
+    for goal in existing_goals:
+        employee_id = goal["employee_id"]
+        weightage_by_employee[employee_id] = (
+            weightage_by_employee.get(employee_id, 0) + goal.get("weightage", 0)
+        )
+
+    count_by_employee: dict[str, int] = {}
+    for goal in existing_goals:
+        employee_id = goal["employee_id"]
+        count_by_employee[employee_id] = count_by_employee.get(employee_id, 0) + 1
+
+    over_limit = []
+    for recipient in recipient_docs:
+        employee_id = recipient["employee_id"]
+        current_count = count_by_employee.get(employee_id, 0)
+        if current_count >= 8:
+            over_limit.append(
+                {
+                    "employee_id": employee_id,
+                    "current_count": current_count,
+                    "limit": 8,
+                }
+            )
+
+    if over_limit:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "Maximum 8 goals allowed per employee",
+                "over_limit_recipients": over_limit,
+            },
+        )
+
     source_goal_id = ObjectId()
     docs_to_insert = []
 
@@ -87,6 +138,15 @@ async def push_shared_goal(payload: PushSharedGoalRequest, current_user: dict) -
             "target_value": payload.target_value,
             "weightage": payload.default_weightage,
             "target_date": payload.target_date,
+            "source_snapshot": {
+                "thrust_area": payload.thrust_area,
+                "title": payload.title,
+                "description": payload.description,
+                "uom_type": payload.uom_type,
+                "measurement_type": payload.measurement_type,
+                "target_value": payload.target_value,
+                "target_date": payload.target_date,
+            },
             "status": GoalStatus.DRAFT,
             "progress_status": ProgressStatus.NOT_STARTED,
             "is_shared": True,
