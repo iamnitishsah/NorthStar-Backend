@@ -13,7 +13,7 @@ from app.schemas.goal_schema import (
 goals = db.goals
 
 
-async def view_goals(current_user: dict) -> dict[str, List[ViewGoalResponse]]:
+async def review_goals(current_user: dict) -> dict[str, List[ViewGoalResponse]]:
     manager_id = current_user["employee_id"]
 
     goal_data = goals.find({"manager_id": manager_id}).sort("created_at", -1)
@@ -155,3 +155,91 @@ async def return_goal(goal_id: str, payload: ReturnGoalRequest, current_user: di
     )
 
     return True, "Goal returned successfully"
+
+
+
+async def view_goals(current_user: dict) -> dict[str, List[ViewGoalResponse]]:
+    manager_id = current_user["employee_id"]
+
+    goal_data = goals.find(
+        {"manager_id": manager_id, "status": GoalStatus.LOCKED}
+    ).sort("created_at", -1)
+
+    grouped_goals = defaultdict(list)
+
+    async for data in goal_data:
+
+        goal = ViewGoalResponse(
+            goal_id=str(data["_id"]),
+
+            employee_name=data["employee_name"],
+
+            thrust_area=data["thrust_area"],
+
+            title=data["title"],
+            description=data.get("description"),
+
+            uom_type=data["uom_type"],
+            measurement_type=data["measurement_type"],
+
+            target_value=data["target_value"],
+
+            weightage=data["weightage"],
+
+            target_date=data.get("target_date"),
+
+            achievement_value=data.get("achievement_value"),
+            progress_percentage=data.get("progress_percentage"),
+
+            status=data["status"],
+
+            manager_note=data.get("manager_note"),
+
+            approver_name=data.get("approver_name"),
+
+            submitted_at=data.get("submitted_at"),
+            approved_at=data.get("approved_at"),
+            returned_at=data.get("returned_at"),
+
+            created_at=data["created_at"],
+            updated_at=data["updated_at"]
+        )
+
+        grouped_goals[data["employee_name"]].append(goal)
+
+    return dict(grouped_goals)
+
+
+
+async def comment_on_goal(goal_id: str, comment: str, current_user: dict) -> tuple[bool, str]:
+    if not ObjectId.is_valid(goal_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid goal ID"
+        )
+
+    goal_data = await goals.find_one({"_id": ObjectId(goal_id)})
+
+    if not goal_data:
+        raise HTTPException(
+            status_code=404,
+            detail="Goal not found"
+        )
+
+    if goal_data["manager_id"] != current_user["employee_id"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Unauthorized to comment on this goal"
+        )
+
+    await goals.update_one(
+        {"_id": ObjectId(goal_id)},
+        {
+            "$set": {
+                "manager_note": comment,
+                "updated_at": datetime.now(UTC)
+            }
+        }
+    )
+
+    return True, "Comment added successfully"
