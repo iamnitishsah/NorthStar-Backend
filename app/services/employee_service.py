@@ -320,7 +320,14 @@ async def quarterly_checkin(goal_id: str, payload: QuarterlyCheckinRequest, curr
     measurement_type = goal_data["measurement_type"]
     uom_type = goal_data["uom_type"]
 
+    if not payload.quarter:
+        raise HTTPException(
+            status_code=400,
+            detail="At least one quarter update is required"
+        )
+
     quarterly_data = {}
+    progress_by_quarter = {}
 
     for quarter, checkin in payload.quarter.items():
 
@@ -374,7 +381,9 @@ async def quarterly_checkin(goal_id: str, payload: QuarterlyCheckinRequest, curr
                     detail="Achievement value must be positive"
                 )
 
-            progress_percentage = achievement_value
+            progress_percentage = (
+                achievement_value / target_value
+            ) * 100
 
         else:
             raise HTTPException(
@@ -389,11 +398,24 @@ async def quarterly_checkin(goal_id: str, payload: QuarterlyCheckinRequest, curr
             "updated_at": datetime.now(UTC)
         }
 
+        progress_by_quarter[str(quarter)] = progress_percentage
+
+    try:
+        latest_quarter_key = max(
+            progress_by_quarter.keys(),
+            key=lambda key: int(key)
+        )
+    except ValueError:
+        latest_quarter_key = list(progress_by_quarter.keys())[-1]
+
+    latest_progress_percentage = progress_by_quarter[latest_quarter_key]
+    latest_achievement_value = quarterly_data[latest_quarter_key]["achievement_value"]
+
     await goals.update_one(
         {"_id": ObjectId(goal_id)},
         {
             "$set": {
-                "progress_percentage": progress_percentage,
+                "progress_percentage": latest_progress_percentage,
                 "quarter": quarterly_data,
                 "updated_at": datetime.now(UTC)
             }
@@ -412,8 +434,8 @@ async def quarterly_checkin(goal_id: str, payload: QuarterlyCheckinRequest, curr
             from app.services.shared_goal_service import sync_shared_achievement
             synced = await sync_shared_achievement(
                 source_goal_id=str(source_goal_id),
-                achievement_value=list(payload.quarter.values())[-1].achievement_value,
-                progress_percentage=progress_percentage,
+                achievement_value=latest_achievement_value,
+                progress_percentage=latest_progress_percentage,
                 quarterly_data=quarterly_data,
                 exclude_employee_id=current_user["employee_id"],
             )
