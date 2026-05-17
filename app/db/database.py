@@ -21,3 +21,7 @@ async def create_indexes():
     await db.goals.create_index("is_shared")
     await db.logs.create_index("timestamp")
     await db.logs.create_index("user_id")
+    await db.unlock_requests.create_index("status")
+    await db.unlock_requests.create_index("goal_id")
+    await db.unlock_requests.create_index("requester_id")
+    await db.unlock_requests.create_index("created_at")

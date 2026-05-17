@@ -79,3 +79,28 @@ class CheckinParams(BaseModel):
 
 class QuarterlyCheckinRequest(BaseModel):
     quarter: Dict[str, CheckinParams]
+
+
+class UnlockGoalRequestCreate(BaseModel):
+    reason: str = Field(min_length=5, max_length=500)
+
+
+class UnlockGoalRequestDecision(BaseModel):
+    reason: Optional[str] = Field(default=None, max_length=500)
+
+
+class UnlockGoalRequestResponse(BaseModel):
+    request_id: str
+    goal_id: str
+    goal_title: str
+    requester_id: str
+    requester_name: str
+    manager_id: Optional[str]
+    manager_name: Optional[str]
+    reason: str
+    status: str
+    resolved_by: Optional[str] = None
+    resolved_at: Optional[datetime] = None
+    rejection_reason: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime

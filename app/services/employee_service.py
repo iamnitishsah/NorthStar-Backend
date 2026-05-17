@@ -14,6 +14,7 @@ from app.schemas.goal_schema import (
 from app.audit.logs import log_action
 
 goals = db.goals
+unlock_requests = db.unlock_requests
 
 
 async def my_goals(current_user: dict) -> List[ViewGoalResponse]:
@@ -589,3 +590,70 @@ async def quarterly_checkin(goal_id: str, payload: QuarterlyCheckinRequest, curr
     )
 
     return True, "Quarterly check-in updated successfully"
+
+
+async def request_unlock_goal(goal_id: str, reason: str, current_user: dict) -> tuple[bool, str]:
+    if not ObjectId.is_valid(goal_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid goal ID"
+        )
+
+    goal_data = await goals.find_one({"_id": ObjectId(goal_id)})
+
+    if not goal_data:
+        raise HTTPException(
+            status_code=404,
+            detail="Goal not found"
+        )
+
+    if goal_data["employee_id"] != current_user["employee_id"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Unauthorized to request unlock for this goal"
+        )
+
+    if goal_data["status"] != GoalStatus.LOCKED:
+        raise HTTPException(
+            status_code=400,
+            detail="Only LOCKED goals can be requested for unlock"
+        )
+
+    existing_request = await unlock_requests.find_one(
+        {
+            "goal_id": ObjectId(goal_id),
+            "status": "PENDING",
+        }
+    )
+    if existing_request:
+        raise HTTPException(
+            status_code=400,
+            detail="An unlock request for this goal is already pending"
+        )
+
+    now = datetime.now(UTC)
+    request_doc = {
+        "goal_id": ObjectId(goal_id),
+        "goal_title": goal_data.get("title"),
+        "requester_id": current_user["employee_id"],
+        "requester_name": current_user.get("name"),
+        "manager_id": current_user.get("manager_id"),
+        "reason": reason,
+        "status": "PENDING",
+        "created_at": now,
+        "updated_at": now,
+    }
+
+    result = await unlock_requests.insert_one(request_doc)
+
+    await log_action(
+        user_id=current_user["employee_id"],
+        action="REQUEST_UNLOCK_GOAL",
+        details={
+            "request_id": str(result.inserted_id),
+            "goal_id": goal_id,
+            "reason": reason,
+        }
+    )
+
+    return True, f"Unlock request submitted with ID: {result.inserted_id}"

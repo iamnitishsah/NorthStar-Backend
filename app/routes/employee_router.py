@@ -6,7 +6,8 @@ from app.schemas.goal_schema import (
     CreateGoalRequest,
     UpdateGoalRequest,
     ViewGoalResponse,
-    QuarterlyCheckinRequest
+    QuarterlyCheckinRequest,
+    UnlockGoalRequestCreate
 )
 from app.services.employee_service import (
     my_goals,
@@ -14,7 +15,8 @@ from app.services.employee_service import (
     update_goal,
     delete_goal,
     submit_goals,
-    quarterly_checkin
+    quarterly_checkin,
+    request_unlock_goal
 )
 from app.services.shared_goal_service import my_shared_goals, update_shared_goal_weightage
 from app.schemas.shared_goal_schema import SharedGoalResponse, UpdateSharedGoalWeightageRequest
@@ -149,5 +151,23 @@ async def update_weightage_router(
 
     if not success:
         raise HTTPException(status_code=400, detail=message)
+
+    return {"message": message}
+
+
+@router.post("/{goal_id}/unlock-request", response_model=dict)
+async def request_unlock_goal_router(
+    goal_id: str,
+    payload: UnlockGoalRequestCreate,
+    current_user: dict = Depends(get_current_user),
+    employee=Depends(require_employee)
+):
+    success, message = await request_unlock_goal(goal_id, payload.reason, current_user)
+
+    if not success:
+        raise HTTPException(
+            status_code=400,
+            detail=message
+        )
 
     return {"message": message}

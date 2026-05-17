@@ -915,121 +915,40 @@ GET /admin/goals/logs?action=UNLOCK_GOAL&user_id=EMP001
 
 ---
 
-### Shared Goal APIs
+#### `GET /admin/goals/unlock-requests`
 
-**Tag:** `Shared Goal APIs` · **Prefix:** `/shared-goals`
-**Auth:** Bearer token required · **Role:** `ADMIN` or `MANAGER` (enforced in the route handler).
+List unlock requests submitted by employees.
+
+**Query Params (optional):**
+- `status`: `PENDING` | `APPROVED`
+
+**Response `200`:** Array of unlock request objects
 
 ---
 
-#### `POST /shared-goals/push`
+#### `PATCH /admin/goals/unlock-requests/{request_id}/approve`
 
-Push a departmental KPI to multiple employees simultaneously. Each recipient gets their own independent goal document in `DRAFT` status. Recipients can only adjust `weightage` — all other fields are read-only (enforced at both update and submit time via `source_snapshot` comparison).
-
-**Request Body:**
-```json
-{
-  "recipient_employee_ids": ["EMP002", "EMP003", "EMP004"],
-  "thrust_area": "Safety",
-  "title": "Zero Incidents FY25",
-  "description": "Maintain zero safety incidents throughout the financial year",
-  "uom_type": "ZERO_BASED",
-  "measurement_type": "MIN",
-  "target_value": 1,
-  "default_weightage": 15,
-  "target_date": "2026-03-31T00:00:00Z"
-}
-```
-
-**Field Rules:**
-- `recipient_employee_ids`: non-empty list; all IDs must correspond to active `EMPLOYEE` role users
-- `default_weightage`: 10–100 (applied to all recipients as a starting weightage)
-- `target_value`: > 0
-
-**Validation:**
-- All recipient IDs must exist and be active employees
-- Any recipient already at 8 goals causes the entire request to fail (with details on which employees are over limit)
-
-**Internal mechanics:**
-- A single `source_goal_id` (ObjectId) is generated and set on all copies — this is the logical parent identifier
-- Each recipient gets a unique `_id` but shares the same `source_goal_id`
-- A `source_snapshot` dict captures the immutable fields at creation time for later enforcement
+Approve an unlock request and unlock the linked goal.
 
 **Response `200`:**
 ```json
-{
-  "message": "Shared goal pushed to 3 employee(s)",
-  "source_goal_id": "664src001...",
-  "recipient_count": 3,
-  "recipients": ["EMP002", "EMP003", "EMP004"]
-}
-```
-
-**Response `400`:**
-```json
-{ "detail": "These employee IDs were not found or are not active employees: ['EMP999']" }
-{ "detail": { "message": "Maximum 8 goals allowed per employee", "over_limit_recipients": [...] } }
+{ "message": "Unlock request approved and goal unlocked" }
 ```
 
 ---
 
-#### `GET /shared-goals/pushed`
+#### `PATCH /admin/goals/unlock-requests/{request_id}/reject`
 
-View shared goals pushed by the authenticated user.
+Reject an unlock request with an optional reason.
 
-- **Admins** see all shared goals across the entire organization
-- **Managers** see only goals they personally pushed
-
-**Response `200`:** Array of `SharedGoalResponse`
-
----
-
-### Organization APIs
-
-**Tag:** `Organization APIs` · **Prefix:** `/organization`
-**Auth:** Bearer token required (any authenticated role).
-
----
-
-#### `GET /organization/hierarchy`
-
-Returns the full organization hierarchy as a recursive tree, built dynamically from `manager_id` relationships in the users collection.
-
-**Algorithm:**
-1. Fetches all active users (only `employee_id`, `name`, `designation`, `department`, `role`, `manager_id`)
-2. Builds an in-memory map of `employee_id → node`
-3. Attaches each node as a child of its manager node
-4. Nodes with no `manager_id`, a non-existent `manager_id`, or a self-referencing `manager_id` become root nodes
-
-**Response `200`:** Array of `HierarchyNode` (recursive)
+**Request Body:**
 ```json
-[
-  {
-    "employee_id": "EMP010",
-    "name": "Carol Director",
-    "designation": "Engineering Director",
-    "department": "Engineering",
-    "role": "MANAGER",
-    "children": [
-      {
-        "employee_id": "EMP001",
-        "name": "Alice Johnson",
-        "designation": "Software Engineer",
-        "department": "Engineering",
-        "role": "EMPLOYEE",
-        "children": []
-      },
-      {
-        "employee_id": "EMP002",
-        "name": "Bob Smith",
-        "designation": "Backend Engineer",
-        "department": "Engineering",
-        "role": "EMPLOYEE",
-        "children": []
-      }
-    ]
-  }
-]
+{ "reason": "Insufficient justification" }
+```
+
+**Response `200`:**
+```json
+{ "message": "Unlock request rejected" }
 ```
 
 ---
@@ -1066,6 +985,7 @@ Returns the full organization hierarchy as a recursive tree, built dynamically f
 - Unlock sets status to `ADMIN_UNLOCKED` (not `RETURNED`)
 - Employee can then edit and resubmit as if the goal were `RETURNED`
 - All unlock events are audit-logged
+- Employees must request unlock via `/employee/goals/{goal_id}/unlock-request`
 
 ### Quarterly Check-in
 - Only `LOCKED` goals can receive check-in updates
@@ -1170,6 +1090,9 @@ Every significant action is recorded in the `logs` collection via the centralize
 | `UPDATE_SHARED_GOAL_WEIGHTAGE` | Employee adjusts | `goal_id`, `new_weightage` |
 | `QUARTERLY_CHECKIN` | Employee logs achievement | `goal_id`, `quarters_updated` |
 | `SYNC_SHARED_ACHIEVEMENT` | System (after primary owner check-in) | `source_goal_id`, `synced_copies`, `quarters_updated` |
+| `REQUEST_UNLOCK_GOAL` | Employee requests unlock | `request_id`, `goal_id`, `reason` |
+| `APPROVE_UNLOCK_REQUEST` | Admin approves unlock request | `request_id`, `goal_id`, `requester_id` |
+| `REJECT_UNLOCK_REQUEST` | Admin rejects unlock request | `request_id`, `goal_id`, `requester_id`, `reason` |
 
 ---
 
