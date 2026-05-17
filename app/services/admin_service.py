@@ -60,7 +60,7 @@ async def view_logs(action_filter: str = None, user_id_filter: str = None) -> li
     if action_filter:
         query["action"] = action_filter
     if user_id_filter:
-        query["user_id"] = user_id_filter
+        query["user_id"] = ObjectId(user_id_filter)
 
     logs_cursor = logs.find(query).sort("timestamp", -1).limit(100)
     logs_list = []
