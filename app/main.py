@@ -15,12 +15,21 @@ app = FastAPI(
     version="1.0"
 )
 
+@app.on_event("startup")
+async def startup():
+    await create_indexes()
+
+@app.get("/", tags=["Health Check"])
+async def root():
+    return {"message": "NorthStar API Gateway is live"}
+
+
 app.include_router(auth_router)
+app.include_router(organization_router)
 app.include_router(employee_goal_router)
 app.include_router(manager_goal_router)
 app.include_router(admin_goal_router)
 app.include_router(achievement_router)
-app.include_router(organization_router)
 
 
 app.add_middleware(
@@ -30,15 +39,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.get("/", tags=["Health Check"])
-async def root():
-    return {"message": "NorthStar API Gateway is live"}
-
-
-@app.on_event("startup")
-async def startup():
-    await create_indexes()
 
 
 if __name__ == "__main__":
