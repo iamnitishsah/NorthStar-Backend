@@ -44,6 +44,8 @@ async def review_goals(current_user: dict) -> dict[str, List[ViewGoalResponse]]:
 
             achievement_value=data.get("achievement_value"),
             progress_percentage=data.get("progress_percentage"),
+            progress_status=data.get("progress_status"),
+            quarter=data.get("quarter", {}),
 
             status=data["status"],
 
@@ -218,6 +220,8 @@ async def view_goals(current_user: dict) -> dict[str, List[ViewGoalResponse]]:
 
             achievement_value=data.get("achievement_value"),
             progress_percentage=data.get("progress_percentage"),
+            progress_status=data.get("progress_status"),
+            quarter=data.get("quarter", {}),
 
             status=data["status"],
 

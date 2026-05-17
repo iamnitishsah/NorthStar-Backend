@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, Dict
+from typing import Any, Optional, Dict
 from pydantic import BaseModel, Field
 from app.constants.enums import GoalStatus, MeasurementType, ProgressStatus, UOMType
 
@@ -13,6 +13,8 @@ class ViewGoalResponse(BaseModel):
     achievement_value: Optional[float] = None
     progress_status: Optional[ProgressStatus] = None
     progress_percentage: Optional[float] = None
+    quarter: Dict[str, Any] = {}
+    progress_status: Optional[ProgressStatus] = None
     employee_name: str
     title: str
     description: Optional[str]

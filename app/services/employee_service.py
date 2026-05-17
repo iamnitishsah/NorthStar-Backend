@@ -39,6 +39,8 @@ async def my_goals(current_user: dict) -> List[ViewGoalResponse]:
             target_date=data.get("target_date"),
             achievement_value=data.get("achievement_value"),
             progress_percentage=data.get("progress_percentage"),
+            progress_status=data.get("progress_status"),
+            quarter=data.get("quarter", {}),
             status=data["status"],
             manager_note=data.get("manager_note"),
             approver_name=data.get("approver_name"),
