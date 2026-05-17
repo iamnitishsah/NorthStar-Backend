@@ -29,7 +29,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
+@app.get("/", tags=["Health Check"])
 async def root():
     return {"message": "NorthStar API Gateway is live"}
 
