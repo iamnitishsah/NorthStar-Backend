@@ -13,7 +13,7 @@ from app.services.manager_service import (
     comment_on_goal
 )
 
-router = APIRouter(prefix="/manager/goals", tags=["Manager Goals"])
+router = APIRouter(prefix="/manager/goals", tags=["Manager APIs"])
 
 
 @router.get("/review", response_model=dict[str, List[ViewGoalResponse]])

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.dependencies.auth_dependency import get_current_user
 from app.services.achievement_service import (update_achievement)
 
-router = APIRouter(prefix="/achievement", tags=["Achievement Tracking"])
+router = APIRouter(prefix="/achievement", tags=["Achievement Tracking APIs"])
 
 
 @router.patch("/{goal_id}", response_model=dict)

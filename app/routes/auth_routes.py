@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from app.schemas.auth_schema import RegisterUserRequest, LoginUserRequest
 from app.services.auth_service import register_user, login_user
 
-router = APIRouter(prefix="/auth", tags=["Authentication"])
+router = APIRouter(prefix="/auth", tags=["Authentication APIs"])
 
 
 @router.post("/register")

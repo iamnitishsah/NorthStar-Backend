@@ -1,16 +1,12 @@
 from typing import List
-
 from fastapi import APIRouter, Depends, HTTPException
-
 from app.dependencies.auth_dependency import get_current_user
 from app.dependencies.role_dependency import require_employee
-
 from app.schemas.goal_schema import (
     CreateGoalRequest,
     UpdateGoalRequest,
     ViewGoalResponse
 )
-
 from app.services.employee_service import (
     my_goals,
     create_goal,
@@ -19,16 +15,10 @@ from app.services.employee_service import (
     submit_goals
 )
 
-router = APIRouter(
-    prefix="/employee/goals",
-    tags=["Employee Goals"]
-)
+router = APIRouter(prefix="/employee/goals", tags=["Employee APIs"])
 
 
-@router.get(
-    "/my",
-    response_model=List[ViewGoalResponse]
-)
+@router.get("/my", response_model=List[ViewGoalResponse])
 async def my_goals_router(
     current_user: dict = Depends(get_current_user)
 ):
@@ -44,10 +34,7 @@ async def my_goals_router(
     return goal
 
 
-@router.post(
-    "/",
-    response_model=dict
-)
+@router.post("/", response_model=dict)
 async def create_goal_router(
     payload: CreateGoalRequest,
     current_user: dict = Depends(get_current_user),
@@ -69,10 +56,7 @@ async def create_goal_router(
     return {"message": message}
 
 
-@router.patch(
-    "/{goal_id}",
-    response_model=dict
-)
+@router.patch("/{goal_id}", response_model=dict)
 async def update_goal_router(
     goal_id: str,
     payload: UpdateGoalRequest,
@@ -94,10 +78,7 @@ async def update_goal_router(
     return {"message": message}
 
 
-@router.delete(
-    "/{goal_id}",
-    response_model=dict
-)
+@router.delete("/{goal_id}", response_model=dict)
 async def delete_goal_router(
     goal_id: str,
     current_user: dict = Depends(get_current_user)
@@ -117,10 +98,7 @@ async def delete_goal_router(
     return {"message": message}
 
 
-@router.post(
-    "/submit",
-    response_model=dict
-)
+@router.post("/submit", response_model=dict)
 async def submit_goal_router(
     goal_ids: list[str],
     current_user: dict = Depends(get_current_user),
