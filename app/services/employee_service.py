@@ -10,6 +10,7 @@ from app.schemas.goal_schema import (
     UpdateGoalRequest,
     ViewGoalResponse
 )
+from app.audit.logs import log_action
 
 goals = db.goals
 
@@ -74,6 +75,8 @@ async def create_goal(payload: CreateGoalRequest, current_user: dict, employee: 
 
     result = await goals.insert_one(goal.model_dump())
 
+    await log_action(current_user["employee_id"], "CREATE_GOAL", f"Goal created with ID: {result.inserted_id}")
+
     return True, f"Goal created successfully with ID: {result.inserted_id}"
 
 
@@ -123,6 +126,8 @@ async def update_goal(goal_id: str, payload: UpdateGoalRequest, current_user: di
         {"$set": update_data}
     )
 
+    await log_action(current_user["employee_id"], "UPDATE_GOAL", f"Goal updated with ID: {goal_id}")
+
     return True, "Goal updated successfully"
 
 
@@ -152,6 +157,8 @@ async def delete_goal(goal_id: str, current_user: dict) -> tuple[bool, str]:
             status_code=400,
             detail="Only DRAFT goals can be deleted"
         )
+    
+    await log_action(current_user["employee_id"], "DELETE_GOAL", f"Goal deleted with ID: {goal_id}")
 
     await goals.delete_one({"_id": ObjectId(goal_id)})
 
@@ -225,5 +232,7 @@ async def submit_goals(goal_ids: list[str], current_user: dict) -> tuple[bool, s
             }
         }
     )
+
+    await log_action(current_user["employee_id"], "SUBMIT_GOALS", f"Goals submitted with IDs: {', '.join(goal_ids)}")
 
     return True, "Goals submitted successfully"

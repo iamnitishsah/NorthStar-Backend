@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from app.constants.enums import GoalStatus
 from app.db.database import db
 from app.constants.enums import (UOMType, MeasurementType)
+from app.audit.logs import log_action
 
 goals = db.goals
 
@@ -95,5 +96,7 @@ async def update_achievement(goal_id: str, achievement_value: float, current_use
             }
         }
     )
+
+    await log_action(current_user["employee_id"], "UPDATE_ACHIEVEMENT", f"Achievement updated for goal with ID: {goal_id}")
 
     return True, "Achievement updated successfully"

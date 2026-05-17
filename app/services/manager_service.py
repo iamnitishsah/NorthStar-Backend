@@ -9,6 +9,7 @@ from app.schemas.goal_schema import (
     ReturnGoalRequest,
     ViewGoalResponse
 )
+from app.audit.logs import log_action
 
 goals = db.goals
 
@@ -16,7 +17,7 @@ goals = db.goals
 async def review_goals(current_user: dict) -> dict[str, List[ViewGoalResponse]]:
     manager_id = current_user["employee_id"]
 
-    goal_data = goals.find({"manager_id": manager_id}).sort("created_at", -1)
+    goal_data = goals.find({"manager_id": manager_id, "status": GoalStatus.SUBMITTED}).sort("created_at", -1)
 
     grouped_goals = defaultdict(list)
 
@@ -110,6 +111,8 @@ async def approve_goal(goal_id: str, current_user: dict) -> tuple[bool, str]:
         }
     )
 
+    await log_action(current_user["employee_id"], "APPROVE_GOAL", f"Goal approved with ID: {goal_id}")
+
     return True, "Goal approved successfully"
 
 
@@ -153,6 +156,8 @@ async def return_goal(goal_id: str, payload: ReturnGoalRequest, current_user: di
             }
         }
     )
+
+    await log_action(current_user["employee_id"], "RETURN_GOAL", f"Goal returned with ID: {goal_id}")
 
     return True, "Goal returned successfully"
 
@@ -241,5 +246,7 @@ async def comment_on_goal(goal_id: str, comment: str, current_user: dict) -> tup
             }
         }
     )
+
+    await log_action(current_user["employee_id"], "COMMENT_ON_GOAL", f"Comment added to goal with ID: {goal_id}")
 
     return True, "Comment added successfully"

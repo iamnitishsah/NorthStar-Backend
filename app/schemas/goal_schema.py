@@ -42,8 +42,12 @@ class CreateGoalRequest(BaseModel):
 
 
 class UpdateGoalRequest(BaseModel):
+    thrust_area: Optional[str] = None
     title: Optional[str] = None
     description: Optional[str] = None
+    uom_type: Optional[UOMType] = None
+    measurement_type: Optional[MeasurementType] = None
+    target_value: Optional[float] = None
     weightage: Optional[int] = None
     target_date: Optional[datetime] = None
 
