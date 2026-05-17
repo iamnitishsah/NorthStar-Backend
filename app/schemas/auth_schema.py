@@ -1,6 +1,7 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 from typing import Optional
 from app.constants.enums import Gender, Role
+
 
 
 class RegisterUserRequest(BaseModel):
@@ -17,8 +18,17 @@ class RegisterUserRequest(BaseModel):
     manager_id: Optional[str] = None
     password: str
 
-
 class LoginUserRequest(BaseModel):
-    email: EmailStr
+    email: Optional[EmailStr] = None
     employee_id: Optional[str] = None
     password: str
+
+    @model_validator(mode="after")
+    def validate_login_identifier(self):
+
+        if not self.email and not self.employee_id:
+            raise ValueError(
+                "Either email or employee_id is required"
+            )
+
+        return self

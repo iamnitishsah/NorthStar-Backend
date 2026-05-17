@@ -42,7 +42,11 @@ async def register_user(payload: RegisterUserRequest):
 async def login_user(payload: LoginUserRequest):
     now = datetime.now(UTC)
 
-    email = payload.email.strip().lower()
+    if payload.email:
+        email = payload.email.strip().lower()
+    else:
+        email = None
+
     employee_id = payload.employee_id.strip() if payload.employee_id else None
     password = payload.password
 
