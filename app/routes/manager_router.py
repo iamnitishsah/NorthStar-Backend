@@ -1,6 +1,7 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
-from app.dependencies.auth_dependency import get_current_user, manager_required
+from app.dependencies.auth_dependency import get_current_user
+from app.dependencies.role_dependency import require_manager
 from app.schemas.goal_schema import (
     ReturnGoalRequest,
     ViewGoalResponse
@@ -17,7 +18,7 @@ router = APIRouter(prefix="/manager/goals", tags=["Manager APIs"])
 
 
 @router.get("/review", response_model=dict[str, List[ViewGoalResponse]])
-async def review_goals_router(current_user: dict = Depends(get_current_user), manager = Depends(manager_required)):
+async def review_goals_router(current_user: dict = Depends(get_current_user), manager = Depends(require_manager)):
     goals = await review_goals(current_user)
 
     if not goals:
@@ -30,7 +31,7 @@ async def review_goals_router(current_user: dict = Depends(get_current_user), ma
 
 
 @router.post("/{goal_id}/approve", response_model=dict)
-async def approve_goal_router(goal_id: str, current_user: dict = Depends(get_current_user), manager = Depends(manager_required)):
+async def approve_goal_router(goal_id: str, current_user: dict = Depends(get_current_user), manager = Depends(require_manager)):
     success, message = await approve_goal(goal_id, current_user)
 
     if not success:
@@ -43,7 +44,7 @@ async def approve_goal_router(goal_id: str, current_user: dict = Depends(get_cur
 
 
 @router.post("/{goal_id}/return", response_model=dict)
-async def return_goal_router(goal_id: str, payload: ReturnGoalRequest, current_user: dict = Depends(get_current_user), manager = Depends(manager_required)):
+async def return_goal_router(goal_id: str, payload: ReturnGoalRequest, current_user: dict = Depends(get_current_user), manager = Depends(require_manager)):
 
     success, message = await return_goal(goal_id, payload, current_user)
 
@@ -57,7 +58,7 @@ async def return_goal_router(goal_id: str, payload: ReturnGoalRequest, current_u
 
 
 @router.get("/", response_model=dict[str, List[ViewGoalResponse]])
-async def view_goals_router(current_user: dict = Depends(get_current_user), manager = Depends(manager_required)):
+async def view_goals_router(current_user: dict = Depends(get_current_user), manager = Depends(require_manager)):
     goals = await view_goals(current_user)
 
     if not goals:
@@ -70,7 +71,7 @@ async def view_goals_router(current_user: dict = Depends(get_current_user), mana
 
 
 @router.post("/{goal_id}/comment", response_model=dict)
-async def comment_on_goal_router(goal_id: str, comment: str, current_user: dict = Depends(get_current_user), manager = Depends(manager_required)):
+async def comment_on_goal_router(goal_id: str, comment: str, current_user: dict = Depends(get_current_user), manager = Depends(require_manager)):
     success, message = await comment_on_goal(goal_id, comment, current_user)
 
     if not success:

@@ -19,8 +19,6 @@ async def review_goals(current_user: dict) -> dict[str, List[ViewGoalResponse]]:
 
     goal_data = goals.find({"manager_id": manager_id, "status": GoalStatus.SUBMITTED}).sort("created_at", -1)
 
-    if 
-
     grouped_goals = defaultdict(list)
 
     async for data in goal_data:
