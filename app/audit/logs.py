@@ -9,4 +9,3 @@ async def log_action(user_id: str, action: str, details: dict):
         "details": details
     }
     await logs.insert_one(log_entry)
-    return True
