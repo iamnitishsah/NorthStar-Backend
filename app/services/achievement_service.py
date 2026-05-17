@@ -97,6 +97,14 @@ async def update_achievement(goal_id: str, achievement_value: float, current_use
         }
     )
 
-    await log_action(current_user["employee_id"], "UPDATE_ACHIEVEMENT", f"Achievement updated for goal with ID: {goal_id}")
+    await log_action(
+        user_id=current_user["employee_id"],
+        action="UPDATE_ACHIEVEMENT",
+        details={
+            "goal_id": goal_id,
+            "achievement_value": achievement_value,
+            "progress_percentage": progress_percentage
+        }
+    )
 
     return True, "Achievement updated successfully"

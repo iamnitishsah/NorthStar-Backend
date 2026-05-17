@@ -43,7 +43,7 @@ async def unlock_goal(goal_id: str, current_user: dict) -> tuple[bool, str]:
     )
 
     await log_action(
-        user_id=current_user["_id"],
+        user_id=current_user["employee_id"],
         action="UNLOCK_GOAL",
         details={
             "goal_id": goal_id,

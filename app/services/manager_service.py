@@ -111,7 +111,15 @@ async def approve_goal(goal_id: str, current_user: dict) -> tuple[bool, str]:
         }
     )
 
-    await log_action(current_user["employee_id"], "APPROVE_GOAL", f"Goal approved with ID: {goal_id}")
+    await log_action(
+        user_id=current_user["employee_id"],
+        action="APPROVE_GOAL",
+        details={
+            "goal_id": goal_id,
+            "employee_id": goal_data["employee_id"],
+            "employee_name": goal_data["employee_name"]
+        }
+    )
 
     return True, "Goal approved successfully"
 
@@ -157,7 +165,16 @@ async def return_goal(goal_id: str, payload: ReturnGoalRequest, current_user: di
         }
     )
 
-    await log_action(current_user["employee_id"], "RETURN_GOAL", f"Goal returned with ID: {goal_id}")
+    await log_action(
+        user_id=current_user["employee_id"],
+        action="RETURN_GOAL",
+        details={
+            "goal_id": goal_id,
+            "employee_id": goal_data["employee_id"],
+            "employee_name": goal_data["employee_name"],
+            "manager_note": payload.manager_note
+        }
+    )
 
     return True, "Goal returned successfully"
 
@@ -247,6 +264,15 @@ async def comment_on_goal(goal_id: str, comment: str, current_user: dict) -> tup
         }
     )
 
-    await log_action(current_user["employee_id"], "COMMENT_ON_GOAL", f"Comment added to goal with ID: {goal_id}")
+    await log_action(
+        user_id=current_user["employee_id"],
+        action="COMMENT_ON_GOAL",
+        details={
+            "goal_id": goal_id,
+            "employee_id": goal_data["employee_id"],
+            "employee_name": goal_data["employee_name"],
+            "comment": comment
+        }
+    )
 
     return True, "Comment added successfully"
