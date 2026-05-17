@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel
 
 
@@ -8,4 +8,5 @@ class HierarchyNode(BaseModel):
     designation: str
     department: str
     role: str
+    manager_id: Optional[str] = None
     children: List["HierarchyNode"] = []

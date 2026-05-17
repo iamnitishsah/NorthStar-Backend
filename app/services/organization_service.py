@@ -61,6 +61,7 @@ async def get_organization_hierarchy() -> list[HierarchyNode]:
             "designation": node["designation"],
             "department": node["department"],
             "role": node["role"],
+            "manager_id": node.get("manager_id"),
             "children": [
                 clean_node(child)
                 for child in node["children"]

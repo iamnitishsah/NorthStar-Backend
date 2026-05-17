@@ -50,4 +50,6 @@ async def get_current_user(
             detail="User not found"
         )
 
+    user.pop("hashed_password", None)
+
     return user

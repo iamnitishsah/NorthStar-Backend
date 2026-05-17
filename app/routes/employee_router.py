@@ -1,5 +1,6 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
+from app.constants.enums import GoalStatus
 from app.dependencies.auth_dependency import get_current_user
 from app.dependencies.role_dependency import require_employee
 from app.schemas.goal_schema import (
@@ -26,10 +27,11 @@ router = APIRouter(prefix="/employee/goals", tags=["Employee APIs"])
 
 @router.get("/my", response_model=List[ViewGoalResponse])
 async def my_goals_router(
+    status: GoalStatus | None = None,
     current_user: dict = Depends(get_current_user)
 ):
 
-    goal = await my_goals(current_user)
+    goal = await my_goals(current_user, status)
 
     return goal
 

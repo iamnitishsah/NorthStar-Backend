@@ -347,7 +347,7 @@ Register a new user. `employee_id` and `email` must both be unique across the sy
 - `role`: one of `EMPLOYEE | MANAGER | ADMIN | HR`
 - `email`: valid email format, unique
 - `employee_id`: unique
-- `manager_id`: optional; should be the `employee_id` of the reporting manager
+- `manager_id`: optional; when provided, must match an existing user whose role is `MANAGER`
 
 **Response `200`:**
 ```json
@@ -359,6 +359,8 @@ Register a new user. `employee_id` and `email` must both be unique across the sy
 
 **Response `400`:**
 ```json
+{ "detail": "manager_id does not match an existing employee" }
+{ "detail": "manager_id must belong to a MANAGER user" }
 { "detail": "<duplicate key or validation error>" }
 ```
 
@@ -424,6 +426,17 @@ If both are provided, `employee_id` takes priority.
 #### `GET /employee/goals/my`
 
 Retrieve all **personal** goals for the authenticated employee (all statuses, excluding shared goal copies).
+
+**Query Params (optional):**
+
+| Param | Type | Description |
+|---|---|---|
+| `status` | GoalStatus | Filter by `DRAFT`, `SUBMITTED`, `RETURNED`, `ADMIN_UNLOCKED`, or `LOCKED` |
+
+**Example:**
+```
+GET /employee/goals/my?status=DRAFT
+```
 
 **Response `200`:** Array of `ViewGoalResponse`
 
@@ -676,7 +689,7 @@ Retrieve all shared goal copies assigned to the authenticated employee (all stat
 
 #### `PATCH /employee/goals/{goal_id}/weightage`
 
-Adjust the weightage of a shared goal copy. Only allowed when status is `DRAFT` or `RETURNED`. Title, target, UoM, and all other fields remain read-only.
+Adjust the weightage of a shared goal copy. Only allowed when status is `DRAFT`, `RETURNED`, or `ADMIN_UNLOCKED`. Title, target, UoM, and all other fields remain read-only.
 
 **Path Param:** `goal_id`
 
@@ -695,7 +708,7 @@ Adjust the weightage of a shared goal copy. Only allowed when status is `DRAFT` 
 **Response `400` / `403`:**
 ```json
 { "detail": "This endpoint is only for shared goals" }
-{ "detail": "Weightage can only be changed while the goal is DRAFT or RETURNED" }
+{ "detail": "Weightage can only be changed while the goal is DRAFT, RETURNED, or ADMIN_UNLOCKED" }
 { "detail": "Unauthorized" }
 ```
 
@@ -818,6 +831,54 @@ List all `LOCKED` (approved) goals for the manager's team, grouped by employee n
 
 ---
 
+#### `GET /manager/goals/checkin-review`
+
+View Planned vs Achievement check-in progress for each team member. Returns all `LOCKED` goals assigned to the authenticated manager, grouped by employee name, with latest achievement and Q1-Q4 check-in status.
+
+**Response `200`:**
+```json
+{
+  "Alice Johnson": [
+    {
+      "goal_id": "664abc123...",
+      "employee_id": "EMP001",
+      "employee_name": "Alice Johnson",
+      "title": "Increase Q3 Sales",
+      "thrust_area": "Revenue Growth",
+      "planned_target_value": 550000,
+      "latest_achievement_value": 420000,
+      "latest_progress_percentage": 76.36,
+      "latest_progress_status": "ON_TRACK",
+      "weightage": 35,
+      "target_date": "2025-12-31T00:00:00Z",
+      "quarters": {
+        "q1": {
+          "achievement_value": 350000,
+          "progress_percentage": 63.64,
+          "progress_status": "ON_TRACK",
+          "manager_note": "Good progress so far.",
+          "completed": true
+        },
+        "q2": {
+          "achievement_value": 420000,
+          "progress_percentage": 76.36,
+          "progress_status": "ON_TRACK",
+          "manager_note": null,
+          "completed": true
+        }
+      }
+    }
+  ]
+}
+```
+
+**Response `404`:**
+```json
+{ "detail": "No check-in data found for this manager" }
+```
+
+---
+
 #### `POST /manager/goals/{goal_id}/comment`
 
 Add a structured check-in comment to a specific quarter of a `LOCKED` goal. The quarter check-in must already exist (the employee must have submitted a check-in for that quarter first).
@@ -860,6 +921,56 @@ Add a structured check-in comment to a specific quarter of a `LOCKED` goal. The 
 
 ---
 
+#### `GET /admin/goals/export`
+
+Export the Achievement Report as CSV for all employee goals. The report includes planned target values, actual achievement values, current progress, and Q1-Q4 check-in actuals.
+
+**Response `200`:** `text/csv`
+
+**Download filename:** `achievement_report.csv`
+
+**CSV columns include:**
+`employee_id`, `employee_name`, `title`, `planned_target_value`, `actual_achievement_value`, `progress_percentage`, `progress_status`, `q1_actual`, `q2_actual`, `q3_actual`, `q4_actual`
+
+---
+
+#### `GET /admin/goals/completion-dashboard`
+
+Show quarterly check-in completion status per employee. The dashboard includes all active employees and computes completion against each employee's `LOCKED` goals, since only locked goals are eligible for quarterly check-ins.
+
+**Response `200`:**
+```json
+[
+  {
+    "employee_id": "EMP001",
+    "employee_name": "Alice Johnson",
+    "manager_id": "MGR001",
+    "manager_name": "Priya Sharma",
+    "total_goals": 5,
+    "checkin_required_goals": 5,
+    "latest_completed_quarter": 2,
+    "quarters": {
+      "q1": {
+        "employee_completed": true,
+        "employee_completed_goals": 5,
+        "manager_completed": true,
+        "manager_completed_goals": 5,
+        "required_goals": 5
+      },
+      "q2": {
+        "employee_completed": true,
+        "employee_completed_goals": 5,
+        "manager_completed": false,
+        "manager_completed_goals": 3,
+        "required_goals": 5
+      }
+    }
+  }
+]
+```
+
+---
+
 #### `PATCH /admin/goals/{goal_id}/unlock`
 
 Unlock a `LOCKED` goal, transitioning it to `ADMIN_UNLOCKED`. This allows the employee to edit and resubmit without a full manager re-approval cycle from scratch. All unlock events are audit-logged with before/after status.
@@ -882,7 +993,7 @@ Unlock a `LOCKED` goal, transitioning it to `ADMIN_UNLOCKED`. This allows the em
 
 #### `GET /admin/goals/logs`
 
-Retrieve the audit log (most recent 100 entries, sorted descending by timestamp). Supports optional filtering.
+Retrieve the audit log, sorted descending by timestamp. Supports optional filtering and pagination.
 
 **Query Params (all optional):**
 
@@ -890,10 +1001,12 @@ Retrieve the audit log (most recent 100 entries, sorted descending by timestamp)
 |---|---|---|
 | `action` | str | Filter by action type, e.g. `APPROVE_GOAL`, `UNLOCK_GOAL` |
 | `user_id` | str | Filter by the `employee_id` who performed the action |
+| `skip` | int | Number of matching logs to skip; defaults to `0` |
+| `limit` | int | Number of logs to return; defaults to `100`, max `500` |
 
 **Example:**
 ```
-GET /admin/goals/logs?action=UNLOCK_GOAL&user_id=EMP001
+GET /admin/goals/logs?action=UNLOCK_GOAL&user_id=EMP001&skip=0&limit=100
 ```
 
 **Response `200`:** Array of log entry objects
@@ -949,6 +1062,111 @@ Reject an unlock request with an optional reason.
 **Response `200`:**
 ```json
 { "message": "Unlock request rejected" }
+```
+
+---
+
+### Admin Analytics APIs
+
+**Tag:** `Admin Analytics APIs` · **Prefix:** `/admin/analytics`
+**Auth:** Bearer token required · **Role:** `ADMIN` enforced on all routes.
+
+---
+
+#### `GET /admin/analytics/qoq`
+
+Quarter-on-quarter progress analytics for employees and manager teams. Uses `LOCKED` goals and averages submitted quarterly `progress_percentage` values.
+
+**Response `200`:**
+```json
+{
+  "employees": [
+    {
+      "employee_id": "EMP001",
+      "employee_name": "Alice Johnson",
+      "manager_id": "MGR001",
+      "manager_name": "Priya Sharma",
+      "goal_count": 5,
+      "quarters": {
+        "q1": {
+          "average_progress_percentage": 63.64,
+          "completed_goals": 5,
+          "qoq_delta": null
+        },
+        "q2": {
+          "average_progress_percentage": 76.36,
+          "completed_goals": 5,
+          "qoq_delta": 12.72
+        }
+      }
+    }
+  ],
+  "teams": [
+    {
+      "manager_id": "MGR001",
+      "manager_name": "Priya Sharma",
+      "employee_count": 8,
+      "goal_count": 35,
+      "quarters": {
+        "q1": {
+          "average_progress_percentage": 61.4,
+          "completed_goals": 32,
+          "qoq_delta": null
+        }
+      }
+    }
+  ]
+}
+```
+
+---
+
+#### `GET /admin/analytics/distribution`
+
+Goal distribution analytics by thrust area, UoM type, and thrust-area/UoM combination. Includes goal counts, total weightage, average latest progress, and status breakdown.
+
+**Response `200`:**
+```json
+{
+  "total_goals": 120,
+  "by_thrust_area": [
+    {
+      "label": "Revenue Growth",
+      "goal_count": 40,
+      "total_weightage": 1200,
+      "average_progress_percentage": 72.5,
+      "status_breakdown": {
+        "LOCKED": 35,
+        "DRAFT": 5
+      }
+    }
+  ],
+  "by_uom_type": [
+    {
+      "label": "NUMERIC",
+      "goal_count": 75,
+      "total_weightage": 2200,
+      "average_progress_percentage": 68.1,
+      "status_breakdown": {
+        "LOCKED": 60,
+        "SUBMITTED": 15
+      }
+    }
+  ],
+  "by_thrust_area_and_uom_type": [
+    {
+      "thrust_area": "Revenue Growth",
+      "uom_type": "NUMERIC",
+      "goal_count": 28,
+      "total_weightage": 840,
+      "average_progress_percentage": 74.2,
+      "status_breakdown": {
+        "LOCKED": 25,
+        "DRAFT": 3
+      }
+    }
+  ]
+}
 ```
 
 ---
@@ -1106,7 +1324,7 @@ The Shared Goal feature allows an Admin or Manager to broadcast a departmental K
 2. A single `source_goal_id` (ObjectId) is generated — this is the logical parent shared across all copies
 3. Each recipient gets their own independent goal document with `is_shared: true`, `source_goal_id` set, and a `source_snapshot` capturing the immutable fields at creation time
 4. Recipients can only adjust `weightage` via `PATCH /employee/goals/{goal_id}/weightage`; all other fields (`title`, `target_value`, `uom_type`, `thrust_area`, `description`, `measurement_type`, `target_date`) are enforced read-only — both at update time and at submission time via snapshot comparison
-5. When the **primary owner** (the pusher) logs a quarterly check-in, `sync_shared_achievement()` propagates `achievement_value`, `progress_percentage`, and the full `quarter` dict to all other `LOCKED` copies sharing the same `source_goal_id`
+5. When the **primary owner** (the pusher) logs a quarterly check-in, `sync_shared_achievement()` propagates `achievement_value`, `progress_percentage`, and only the newly submitted quarter entries to all other `LOCKED` copies sharing the same `source_goal_id`
 6. Non-primary-owner recipients see the synced achievement data but cannot log their own check-ins (they can only submit and have their goals approved)
 
 ---
@@ -1122,6 +1340,14 @@ JWT_REFRESH_SECRET=NorthStarRefreshSecretKey
 MONGO_URI=mongodb://localhost:27017/
 REDIS_HOST=localhost
 REDIS_PORT=6379
+REDIS_URL=redis://localhost:6379/0
+CELERY_RESULT_BACKEND=redis://localhost:6379/1
+EMAIL_FROM=northstar@example.com
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=northstar@example.com
+SMTP_PASSWORD=dummy-app-password
+SMTP_USE_TLS=true
 ```
 
 | Variable | Default | Description |
@@ -1132,6 +1358,14 @@ REDIS_PORT=6379
 | `MONGO_URI` | `mongodb://localhost:27017/` | MongoDB connection string |
 | `REDIS_HOST` | `localhost` | Redis server host |
 | `REDIS_PORT` | `6379` | Redis server port |
+| `REDIS_URL` | `redis://localhost:6379/0` | Celery broker URL |
+| `CELERY_RESULT_BACKEND` | `redis://localhost:6379/1` | Celery result backend |
+| `EMAIL_FROM` | `northstar@example.com` | Sender email address |
+| `SMTP_HOST` | `smtp.gmail.com` | SMTP host; for SendGrid use `smtp.sendgrid.net` |
+| `SMTP_PORT` | `587` | SMTP port |
+| `SMTP_USERNAME` | `northstar@example.com` | SMTP username; for SendGrid use `apikey` |
+| `SMTP_PASSWORD` | `dummy-app-password` | SMTP app password or SendGrid API key |
+| `SMTP_USE_TLS` | `true` | Whether to use STARTTLS |
 
 ---
 
@@ -1159,6 +1393,21 @@ Or directly with uvicorn:
 
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### Start the email worker
+
+Goal submission, approval, and return emails are queued with Celery and Redis, then sent by SMTP in the worker process.
+
+```bash
+celery -A app.core.celery_app.celery_app worker --loglevel=info
+```
+
+For SendGrid SMTP, set:
+```env
+SMTP_HOST=smtp.sendgrid.net
+SMTP_USERNAME=apikey
+SMTP_PASSWORD=<sendgrid_api_key>
 ```
 
 ### API Docs

@@ -12,16 +12,20 @@ from app.schemas.goal_schema import (
     QuarterlyCheckinRequest
 )
 from app.audit.logs import log_action
+from app.services.notification_service import notify_goals_submitted
 
 goals = db.goals
 unlock_requests = db.unlock_requests
+users = db.users
 
 
-async def my_goals(current_user: dict) -> List[ViewGoalResponse]:
+async def my_goals(current_user: dict, status: GoalStatus | None = None) -> List[ViewGoalResponse]:
     employee_id = current_user["employee_id"]
-    goal_data = goals.find(
-        {"employee_id": employee_id, "is_shared": {"$ne": True}}
-    ).sort("created_at", -1)
+    query = {"employee_id": employee_id, "is_shared": {"$ne": True}}
+    if status:
+        query["status"] = status
+
+    goal_data = goals.find(query).sort("created_at", -1)
 
     goals_list = []
 
@@ -332,6 +336,21 @@ async def submit_goals(goal_ids: list[str], current_user: dict) -> tuple[bool, s
             "number_of_goals_submitted": len(selected_goals)
         }
     )
+
+    goals_by_manager = {}
+    for goal in selected_goals:
+        manager_id = goal.get("manager_id")
+        if not manager_id:
+            continue
+        goals_by_manager.setdefault(manager_id, []).append(goal.get("title"))
+
+    for manager_id, goal_titles in goals_by_manager.items():
+        manager = await users.find_one({"employee_id": manager_id}, {"email": 1})
+        notify_goals_submitted(
+            manager_email=manager.get("email") if manager else None,
+            employee_name=current_user.get("name"),
+            goal_titles=goal_titles,
+        )
 
     return True, "Goals submitted successfully"
 

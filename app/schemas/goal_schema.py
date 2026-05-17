@@ -59,6 +59,11 @@ class ReturnGoalRequest(BaseModel):
     manager_note: Optional[str] = None
 
 
+class ApproveGoalRequest(BaseModel):
+    target_value: Optional[float] = Field(default=None, gt=0)
+    weightage: Optional[int] = Field(default=None, ge=10, le=100)
+
+
 class CommentGoalRequest(BaseModel):
     quarter: int
     comment: str

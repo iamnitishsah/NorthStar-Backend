@@ -10,8 +10,13 @@ from app.schemas.goal_schema import (
     ViewGoalResponse
 )
 from app.audit.logs import log_action
+from app.services.notification_service import (
+    notify_goal_approved,
+    notify_goal_returned,
+)
 
 goals = db.goals
+users = db.users
 
 
 async def review_goals(current_user: dict) -> dict[str, List[ViewGoalResponse]]:
@@ -66,7 +71,7 @@ async def review_goals(current_user: dict) -> dict[str, List[ViewGoalResponse]]:
     return dict(grouped_goals)
 
 
-async def approve_goal(goal_id: str, tweaks: dict, current_user: dict) -> tuple[bool, str]:
+async def approve_goal(goal_id: str, tweaks: dict | None, current_user: dict) -> tuple[bool, str]:
 
     if not ObjectId.is_valid(goal_id):
         raise HTTPException(
@@ -139,6 +144,16 @@ async def approve_goal(goal_id: str, tweaks: dict, current_user: dict) -> tuple[
         }
     )
 
+    employee = await users.find_one(
+        {"employee_id": goal_data["employee_id"]},
+        {"email": 1}
+    )
+    notify_goal_approved(
+        employee_email=employee.get("email") if employee else None,
+        goal_title=goal_data.get("title"),
+        manager_name=current_user.get("name"),
+    )
+
     return True, "Goal approved successfully"
 
 
@@ -192,6 +207,17 @@ async def return_goal(goal_id: str, payload: ReturnGoalRequest, current_user: di
             "employee_name": goal_data["employee_name"],
             "manager_note": payload.manager_note
         }
+    )
+
+    employee = await users.find_one(
+        {"employee_id": goal_data["employee_id"]},
+        {"email": 1}
+    )
+    notify_goal_returned(
+        employee_email=employee.get("email") if employee else None,
+        goal_title=goal_data.get("title"),
+        manager_name=current_user.get("name"),
+        manager_note=payload.manager_note,
     )
 
     return True, "Goal returned successfully"
@@ -250,6 +276,52 @@ async def view_goals(current_user: dict) -> dict[str, List[ViewGoalResponse]]:
         grouped_goals[data["employee_name"]].append(goal)
 
     return dict(grouped_goals)
+
+
+async def checkin_review(current_user: dict) -> dict[str, list[dict]]:
+    manager_id = current_user["employee_id"]
+
+    goal_data = goals.find(
+        {"manager_id": manager_id, "status": GoalStatus.LOCKED}
+    ).sort([("employee_name", 1), ("created_at", -1)])
+
+    grouped_review = defaultdict(list)
+
+    async for data in goal_data:
+        quarter = data.get("quarter") or {}
+        quarters = {}
+
+        for quarter_number in range(1, 5):
+            quarter_data = quarter.get(str(quarter_number)) or {}
+            quarters[f"q{quarter_number}"] = {
+                "achievement_value": quarter_data.get("achievement_value"),
+                "progress_percentage": quarter_data.get("progress_percentage"),
+                "progress_status": quarter_data.get("progress_status"),
+                "manager_note": quarter_data.get("manager_note"),
+                "updated_at": quarter_data.get("updated_at"),
+                "completed": bool(quarter_data),
+            }
+
+        grouped_review[data["employee_name"]].append(
+            {
+                "goal_id": str(data["_id"]),
+                "employee_id": data.get("employee_id"),
+                "employee_name": data.get("employee_name"),
+                "title": data.get("title"),
+                "thrust_area": data.get("thrust_area"),
+                "uom_type": data.get("uom_type"),
+                "measurement_type": data.get("measurement_type"),
+                "planned_target_value": data.get("target_value"),
+                "latest_achievement_value": data.get("achievement_value"),
+                "latest_progress_percentage": data.get("progress_percentage"),
+                "latest_progress_status": data.get("progress_status"),
+                "weightage": data.get("weightage"),
+                "target_date": data.get("target_date"),
+                "quarters": quarters,
+            }
+        )
+
+    return dict(grouped_review)
 
 
 async def comment_on_goal(goal_id: str, quarter: int, comment: str, current_user: dict) -> tuple[bool, str]:

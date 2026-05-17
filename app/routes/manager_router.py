@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.dependencies.auth_dependency import get_current_user
 from app.dependencies.role_dependency import require_manager
 from app.schemas.goal_schema import (
+    ApproveGoalRequest,
     ReturnGoalRequest,
     ViewGoalResponse,
     CommentGoalRequest
@@ -12,6 +13,7 @@ from app.services.manager_service import (
     approve_goal,
     return_goal,
     view_goals,
+    checkin_review,
     comment_on_goal
 )
 
@@ -32,7 +34,8 @@ async def review_goals_router(current_user: dict = Depends(get_current_user), ma
 
 
 @router.post("/{goal_id}/approve", response_model=dict)
-async def approve_goal_router(goal_id: str, tweaks: dict = None, current_user: dict = Depends(get_current_user), manager = Depends(require_manager)):
+async def approve_goal_router(goal_id: str, payload: ApproveGoalRequest | None = None, current_user: dict = Depends(get_current_user), manager = Depends(require_manager)):
+    tweaks = payload.model_dump(exclude_none=True) if payload else None
     success, message = await approve_goal(goal_id, tweaks, current_user)
 
     if not success:
@@ -69,6 +72,19 @@ async def view_goals_router(current_user: dict = Depends(get_current_user), mana
         )
 
     return goals
+
+
+@router.get("/checkin-review", response_model=dict[str, list[dict]])
+async def checkin_review_router(current_user: dict = Depends(get_current_user), manager = Depends(require_manager)):
+    review = await checkin_review(current_user)
+
+    if not review:
+        raise HTTPException(
+            status_code=404,
+            detail="No check-in data found for this manager"
+        )
+
+    return review
 
 
 @router.post("/{goal_id}/comment", response_model=dict)

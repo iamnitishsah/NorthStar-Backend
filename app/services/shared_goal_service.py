@@ -225,10 +225,14 @@ async def update_shared_goal_weightage(goal_id: str, payload: UpdateSharedGoalWe
     if goal_data["employee_id"] != current_user["employee_id"]:
         raise HTTPException(status_code=403, detail="Unauthorized")
 
-    if goal_data["status"] not in [GoalStatus.DRAFT, GoalStatus.RETURNED]:
+    if goal_data["status"] not in [
+        GoalStatus.DRAFT,
+        GoalStatus.RETURNED,
+        GoalStatus.ADMIN_UNLOCKED,
+    ]:
         raise HTTPException(
             status_code=400,
-            detail="Weightage can only be changed while the goal is DRAFT or RETURNED",
+            detail="Weightage can only be changed while the goal is DRAFT, RETURNED, or ADMIN_UNLOCKED",
         )
 
     await goals.update_one(
@@ -252,6 +256,14 @@ async def update_shared_goal_weightage(goal_id: str, payload: UpdateSharedGoalWe
 
 
 async def sync_shared_achievement(source_goal_id: str, achievement_value: float, progress_percentage: float, quarterly_data: dict, exclude_employee_id: str,) -> int:
+    now = datetime.now(UTC)
+    set_fields = {
+        "achievement_value": achievement_value,
+        "progress_percentage": progress_percentage,
+        "updated_at": now,
+        **{f"quarter.{key}": value for key, value in quarterly_data.items()},
+    }
+
     result = await goals.update_many(
         {
             "source_goal_id": ObjectId(source_goal_id),
@@ -260,12 +272,7 @@ async def sync_shared_achievement(source_goal_id: str, achievement_value: float,
             "is_shared": True,
         },
         {
-            "$set": {
-                "achievement_value": achievement_value,
-                "progress_percentage": progress_percentage,
-                "quarter": quarterly_data,
-                "updated_at": datetime.now(UTC),
-            }
+            "$set": set_fields
         },
     )
     return result.modified_count

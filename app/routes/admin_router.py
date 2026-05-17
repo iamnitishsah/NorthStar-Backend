@@ -1,7 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from app.dependencies.auth_dependency import get_current_user
 from app.dependencies.role_dependency import require_admin
 from app.services.admin_service import (
+    completion_dashboard,
+    export_goals_report,
     unlock_goal,
     view_logs,
     view_unlock_requests,
@@ -11,6 +14,21 @@ from app.services.admin_service import (
 from app.schemas.goal_schema import UnlockGoalRequestResponse, UnlockGoalRequestDecision
 
 router = APIRouter(prefix="/admin/goals", tags=["Admin APIs"])
+
+
+@router.get("/export")
+async def export_goals_report_router(current_user: dict = Depends(get_current_user), admin=Depends(require_admin)):
+    csv_content = await export_goals_report()
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=achievement_report.csv"}
+    )
+
+
+@router.get("/completion-dashboard", response_model=list[dict])
+async def completion_dashboard_router(current_user: dict = Depends(get_current_user), admin=Depends(require_admin)):
+    return await completion_dashboard()
 
 
 @router.patch("/{goal_id}/unlock", response_model=dict)
@@ -28,8 +46,20 @@ async def unlock_goal_router(goal_id: str, current_user: dict = Depends(get_curr
 
 
 @router.get("/logs", response_model=list[dict])
-async def view_logs_router(action: str = None, user_id: str = None, current_user: dict = Depends(get_current_user), admin=Depends(require_admin)):
-    logs = await view_logs(action_filter=action, user_id_filter=user_id)
+async def view_logs_router(
+    action: str = None,
+    user_id: str = None,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
+    current_user: dict = Depends(get_current_user),
+    admin=Depends(require_admin)
+):
+    logs = await view_logs(
+        action_filter=action,
+        user_id_filter=user_id,
+        skip=skip,
+        limit=limit
+    )
     return logs
 
 

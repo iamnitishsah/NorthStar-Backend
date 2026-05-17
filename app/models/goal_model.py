@@ -1,5 +1,5 @@
 from datetime import datetime, UTC
-from typing import Optional, Dict, Union
+from typing import Any, Optional, Dict, Union
 from pydantic import BaseModel, Field, validator
 from app.constants.enums import (
     GoalStatus,
@@ -37,8 +37,13 @@ class Goal(BaseModel):
     approver_id: Optional[str] = None
     approver_name: Optional[str] = None
     is_shared: bool = False
+    source_goal_id: Optional[Any] = None
+    source_snapshot: Optional[Dict[str, Any]] = None
     primary_owner_id: Optional[str] = None
+    primary_owner_name: Optional[str] = None
+    achievement_value: Optional[Union[float, str]] = None
     progress_percentage: Optional[float] = None
+    progress_status: Optional[ProgressStatus] = None
     quarter: Dict[str, CheckinParams] = Field(default_factory=dict)
     submitted_at: Optional[datetime] = None
     approved_at: Optional[datetime] = None

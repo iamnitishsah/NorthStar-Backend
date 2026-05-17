@@ -1,6 +1,7 @@
 from datetime import datetime, UTC
 from app.db.database import db
 from app.core.security import hash_password, verify_password
+from app.constants.enums import Role
 from app.models.user_model import User
 from app.schemas.auth_schema import RegisterUserRequest, LoginUserRequest
 from app.core.auth import create_access_token, create_refresh_token
@@ -12,6 +13,14 @@ users = db.users
 async def register_user(payload: RegisterUserRequest):
     now = datetime.now(UTC)
     email = payload.email.strip().lower()
+    manager_id = payload.manager_id.strip() if payload.manager_id else None
+
+    if manager_id:
+        manager = await users.find_one({"employee_id": manager_id})
+        if not manager:
+            return False, "manager_id does not match an existing employee"
+        if manager.get("role") != Role.MANAGER:
+            return False, "manager_id must belong to a MANAGER user"
 
     encrypted = hash_password(payload.password)
 
@@ -25,7 +34,7 @@ async def register_user(payload: RegisterUserRequest):
     department=payload.department,
     designation=payload.designation,
     role=payload.role,
-    manager_id=payload.manager_id,
+    manager_id=manager_id,
     hashed_password=encrypted,
     created_on=now,
 )
