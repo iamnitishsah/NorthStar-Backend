@@ -31,7 +31,6 @@ class Goal(BaseModel):
     achievement_value: Optional[float] = None
     progress_percentage: Optional[float] = None
 
-    # timestamps
     submitted_at: Optional[datetime] = None
     approved_at: Optional[datetime] = None
     returned_at: Optional[datetime] = None
