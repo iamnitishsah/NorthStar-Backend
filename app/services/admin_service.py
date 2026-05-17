@@ -6,6 +6,7 @@ from app.db.database import db
 from app.audit.logs import log_action
 
 goals = db.goals
+logs = db.logs
 
 
 async def unlock_goal(goal_id: str, current_user: dict) -> tuple[bool, str]:
@@ -43,7 +44,7 @@ async def unlock_goal(goal_id: str, current_user: dict) -> tuple[bool, str]:
 
     await log_action(
         user_id=current_user["_id"],
-        action="unlock_goal",
+        action="UNLOCK_GOAL",
         details={
             "goal_id": goal_id,
             "previous_status": GoalStatus.LOCKED,
@@ -52,3 +53,19 @@ async def unlock_goal(goal_id: str, current_user: dict) -> tuple[bool, str]:
     )
 
     return True, "Goal unlocked successfully"
+
+
+async def view_logs(action_filter: str = None, user_id_filter: str = None) -> list[dict]:
+    query = {}
+    if action_filter:
+        query["action"] = action_filter
+    if user_id_filter:
+        query["user_id"] = user_id_filter
+
+    logs_cursor = logs.find(query).sort("timestamp", -1).limit(100)
+    logs_list = []
+    async for log in logs_cursor:
+        log["_id"] = str(log["_id"])
+        log["user_id"] = str(log["user_id"])
+        logs_list.append(log)
+    return logs_list
