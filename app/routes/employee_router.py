@@ -16,6 +16,8 @@ from app.services.employee_service import (
     submit_goals,
     quarterly_checkin
 )
+from app.services.shared_goal_service import my_shared_goals, update_shared_goal_weightage
+from app.schemas.shared_goal_schema import SharedGoalResponse, UpdateSharedGoalWeightageRequest
 
 router = APIRouter(prefix="/employee/goals", tags=["Employee APIs"])
 
@@ -125,5 +127,27 @@ async def quarterly_checkin_router(goal_id: str, payload: QuarterlyCheckinReques
             status_code=400,
             detail=message
         )
+
+    return {"message": message}
+
+
+@router.get("/my-shared-goals", response_model=List[SharedGoalResponse])
+async def my_shared_goals_router(
+    current_user: dict = Depends(get_current_user),
+):
+    return await my_shared_goals(current_user)
+
+
+
+@router.patch("/{goal_id}/weightage", response_model=dict)
+async def update_weightage_router(
+    goal_id: str,
+    payload: UpdateSharedGoalWeightageRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    success, message = await update_shared_goal_weightage(goal_id, payload, current_user)
+
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
 
     return {"message": message}

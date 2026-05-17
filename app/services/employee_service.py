@@ -72,7 +72,6 @@ async def create_goal(payload: CreateGoalRequest, current_user: dict, employee: 
         weightage=payload.weightage,
         target_date=payload.target_date,
         status=GoalStatus.DRAFT,
-        progress_status=ProgressStatus.NOT_STARTED
     )
 
     result = await goals.insert_one(goal.model_dump())
@@ -118,6 +117,14 @@ async def update_goal(goal_id: str, payload: UpdateGoalRequest, current_user: di
             status_code=400,
             detail="Only DRAFT or RETURNED goals can be updated"
         )
+    
+    if goal_data.get("is_shared"):
+        restricted = {k: v for k, v in payload.model_dump().items() if v is not None and k in ["title", "uom_type", "measurement_type", "target_value", "thrust_area"]}
+        if restricted:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Shared goal fields are read-only: {list(restricted.keys())}. Use PATCH /shared-goals/{{goal_id}}/weightage to adjust weightage."
+            )
 
     update_data = {
         k: v
@@ -391,6 +398,33 @@ async def quarterly_checkin(goal_id: str, payload: QuarterlyCheckinRequest, curr
         }
     )
 
+    # ── Shared goal sync ──────────────────────────────────────────────────────
+    # If this is a shared goal and the updater is the primary owner,
+    # propagate achievement to all linked copies.
+    is_shared = goal_data.get("is_shared", False)
+    is_primary_owner = goal_data.get("primary_owner_id") == current_user["employee_id"]
+ 
+    if is_shared and is_primary_owner:
+        source_goal_id = goal_data.get("source_goal_id")
+        if source_goal_id:
+            from app.services.shared_goal_service import sync_shared_achievement
+            synced = await sync_shared_achievement(
+                source_goal_id=str(source_goal_id),
+                achievement_value=list(payload.quarter.values())[-1].achievement_value,
+                progress_percentage=progress_percentage,
+                quarterly_data=quarterly_data,
+                exclude_employee_id=current_user["employee_id"],
+            )
+            await log_action(
+                user_id=current_user["employee_id"],
+                action="SYNC_SHARED_ACHIEVEMENT",
+                details={
+                    "source_goal_id": str(source_goal_id),
+                    "synced_copies": synced,
+                    "quarters_updated": list(payload.quarter.keys())
+                }
+            )
+ 
     await log_action(
         user_id=current_user["employee_id"],
         action="QUARTERLY_CHECKIN",
