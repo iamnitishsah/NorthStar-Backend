@@ -395,16 +395,10 @@ async def quarterly_checkin(goal_id: str, payload: QuarterlyCheckinRequest, curr
             detail="At least one quarter update is required"
         )
 
-    if any(q not in [1, 2, 3, 4] for q in incoming_quarters):
+    if len(incoming_quarters) != 1:
         raise HTTPException(
             status_code=400,
-            detail="Quarter must be between 1 and 4"
-        )
-
-    if len(set(incoming_quarters)) != len(incoming_quarters):
-        raise HTTPException(
-            status_code=400,
-            detail="Duplicate quarter updates are not allowed"
+            detail="Only one quarter can be updated per request"
         )
 
     min_incoming = min(incoming_quarters)
