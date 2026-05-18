@@ -1030,39 +1030,129 @@ GET /admin/goals/logs?action=UNLOCK_GOAL&user_id=EMP001&skip=0&limit=100
 
 #### `GET /admin/goals/unlock-requests`
 
-List unlock requests submitted by employees.
+List all unlock requests submitted by employees, with optional status filtering.
 
 **Query Params (optional):**
-- `status`: `PENDING` | `APPROVED`
+- `status`: `PENDING` | `APPROVED` | `REJECTED`
 
 **Response `200`:** Array of unlock request objects
+```json
+[
+  {
+    "request_id": "664req001...",
+    "goal_id": "664abc123...",
+    "goal_title": "Increase Q3 Sales",
+    "requester_id": "EMP001",
+    "requester_name": "Alice Johnson",
+    "manager_id": "EMP010",
+    "manager_name": "Priya Sharma",
+    "reason": "Target market conditions have changed; need to adjust target value",
+    "status": "PENDING",
+    "resolved_by": null,
+    "resolved_at": null,
+    "rejection_reason": null,
+    "created_at": "2025-06-10T14:30:00Z",
+    "updated_at": "2025-06-10T14:30:00Z"
+  }
+]
+```
+
+---
+
+#### `POST /employee/goals/{goal_id}/unlock-request`
+
+Employee endpoint to request unlock of a `LOCKED` goal. Requires a reason (5–500 characters).
+
+**Auth:** Bearer token + Employee role
+
+**Path Param:** `goal_id`
+
+**Request Body:**
+```json
+{
+  "reason": "Target market conditions have changed; need to adjust target value and weightage"
+}
+```
+
+**Validation:**
+- Goal must exist and belong to the authenticated employee
+- Goal status must be `LOCKED`
+- No pending unlock request for this goal can already exist
+
+**Response `200`:**
+```json
+{ "message": "Unlock request submitted with ID: 664req001..." }
+```
+
+**Response `400` / `403` / `404`:**
+```json
+{ "detail": "Only LOCKED goals can be requested for unlock" }
+{ "detail": "An unlock request for this goal is already pending" }
+{ "detail": "Unauthorized to request unlock for this goal" }
+{ "detail": "Goal not found" }
+```
+
+**Audit Trail:** `REQUEST_UNLOCK_GOAL` log entry created with request_id, goal_id, and reason.
 
 ---
 
 #### `PATCH /admin/goals/unlock-requests/{request_id}/approve`
 
-Approve an unlock request and unlock the linked goal.
+Admin endpoint to approve an unlock request. This unlocks the linked goal (sets status to `ADMIN_UNLOCKED`), allowing the employee to edit and resubmit.
+
+**Auth:** Bearer token + Admin role
+
+**Path Param:** `request_id`
 
 **Response `200`:**
 ```json
 { "message": "Unlock request approved and goal unlocked" }
 ```
 
+**Response `400` / `404`:**
+```json
+{ "detail": "Unlock request is not pending" }
+{ "detail": "Only LOCKED goals can be unlocked" }
+{ "detail": "Unlock request not found" }
+{ "detail": "Goal not found" }
+```
+
+**Audit Trail:** 
+- `APPROVE_UNLOCK_REQUEST` — admin approval action
+- Goal status changed from `LOCKED` to `ADMIN_UNLOCKED`
+
 ---
 
 #### `PATCH /admin/goals/unlock-requests/{request_id}/reject`
 
-Reject an unlock request with an optional reason.
+Admin endpoint to reject an unlock request with an optional reason.
+
+**Auth:** Bearer token + Admin role
+
+**Path Param:** `request_id`
 
 **Request Body:**
 ```json
-{ "reason": "Insufficient justification" }
+{
+  "reason": "Current target is achievable; insufficient justification for unlock"
+}
 ```
+
+**Validation:**
+- Request must have status `PENDING`
 
 **Response `200`:**
 ```json
 { "message": "Unlock request rejected" }
 ```
+
+**Response `400` / `404`:**
+```json
+{ "detail": "Unlock request is not pending" }
+{ "detail": "Unlock request not found" }
+```
+
+**Audit Trail:** `REJECT_UNLOCK_REQUEST` log entry created with request_id, goal_id, requester_id, and rejection reason.
 
 ---
 
@@ -1171,7 +1261,201 @@ Goal distribution analytics by thrust area, UoM type, and thrust-area/UoM combin
 
 ---
 
-## Business Rules & Validations
+### Shared Goal APIs
+
+**Tag:** `Shared Goal APIs` · **Prefix:** `/shared-goals`
+**Auth:** Bearer token required
+
+The Shared Goal APIs allow Managers and Admins to broadcast departmental KPIs to multiple employees. Recipients can adjust weightage but core goal fields are immutable. Primary owner achievement updates sync automatically across all linked copies.
+
+---
+
+#### `POST /shared-goals/push`
+
+Push a shared goal (KPI) to multiple employees. Only Managers and Admins can push shared goals.
+
+**Auth:** Bearer token + (Manager or Admin role)
+
+**Request Body:**
+```json
+{
+  "recipient_employee_ids": ["EMP001", "EMP002", "EMP003"],
+  "thrust_area": "Safety",
+  "title": "Zero Incidents FY25",
+  "description": "Maintain zero safety incidents throughout the fiscal year",
+  "uom_type": "ZERO_BASED",
+  "measurement_type": "MIN",
+  "target_value": 1.0,
+  "default_weightage": 15,
+  "target_date": "2026-03-31T00:00:00Z"
+}
+```
+
+**Field Rules:**
+- `recipient_employee_ids`: non-empty array of valid active employee IDs
+- `thrust_area`, `title`: 3–100 characters
+- `description`: optional, max 500 characters
+- `uom_type`: `NUMERIC | PERCENTAGE | TIMELINE | ZERO_BASED`
+- `measurement_type`: `MIN | MAX`
+- `target_value`: must be > 0
+- `default_weightage`: 10–100 (assigned to all recipients initially)
+
+**Validation:**
+- All recipient IDs must exist and be active EMPLOYEE role users
+- Each recipient must have < 8 active goals (after insertion would not exceed 8)
+
+**Response `200`:**
+```json
+{
+  "message": "Shared goal pushed to 3 employee(s)",
+  "source_goal_id": "664abc000...",
+  "recipient_count": 3,
+  "recipients": ["EMP001", "EMP002", "EMP003"]
+}
+```
+
+**Response `400`:**
+```json
+{ "detail": "These employee IDs were not found or are not active employees: [\"EMP999\"]" }
+{ "detail": { "message": "Maximum 8 goals allowed per employee", "over_limit_recipients": [...] } }
+```
+
+**Effect:**
+- Single `source_goal_id` (ObjectId) created as logical parent
+- Each recipient gets independent goal document with:
+  - `is_shared: true`
+  - `source_goal_id` referencing the parent
+  - `source_snapshot` capturing immutable fields (title, uom_type, measurement_type, target_value, thrust_area, description, target_date, target_date)
+  - `primary_owner_id` set to the pusher's employee_id
+  - Initial status: `DRAFT`
+- All goals start with the same `default_weightage`
+
+**Audit Trail:** `PUSH_SHARED_GOAL` log entry with source_goal_id, title, recipients list, and count.
+
+---
+
+#### `GET /shared-goals/pushed`
+
+View all shared goals that the current user has pushed. Only Managers (for goals they pushed) and Admins (for all pushed goals) can access this.
+
+**Auth:** Bearer token + (Manager or Admin role)
+
+**Response `200`:** Array of `SharedGoalResponse` objects (see `GET /employee/goals/my-shared-goals` for response structure)
+
+**Role Rules:**
+- **Manager**: Returns only shared goals where `primary_owner_id == current_user.employee_id`
+- **Admin**: Returns all shared goals in the system
+
+---
+
+#### `PATCH /employee/goals/{goal_id}/weightage`
+
+Employee endpoint to adjust weightage of a shared goal copy only. All other fields are read-only for shared goals.
+
+**Auth:** Bearer token + Employee role
+
+**Path Param:** `goal_id` (must be a shared goal copy)
+
+**Request Body:**
+```json
+{ "weightage": 20 }
+```
+
+**Field Rules:**
+- `weightage`: 10–100
+
+**Validation:**
+- Goal must exist and belong to the authenticated employee
+- Goal must be a shared goal (`is_shared: true`)
+- Goal status must be `DRAFT`, `RETURNED`, or `ADMIN_UNLOCKED`
+
+**Response `200`:**
+```json
+{ "message": "Weightage updated successfully" }
+```
+
+**Response `400` / `403`:**
+```json
+{ "detail": "This endpoint is only for shared goals" }
+{ "detail": "Weightage can only be changed while the goal is DRAFT, RETURNED, or ADMIN_UNLOCKED" }
+{ "detail": "Unauthorized" }
+```
+
+**Audit Trail:** `UPDATE_SHARED_GOAL_WEIGHTAGE` log entry with goal_id and new_weightage.
+
+---
+
+#### `GET /employee/goals/my-shared-goals`
+
+Employee endpoint to view all shared goal copies assigned to them (all statuses).
+
+**Auth:** Bearer token + Employee role
+
+**Response `200`:** Array of `SharedGoalResponse` objects
+```json
+[
+  {
+    "goal_id": "664abc999...",
+    "source_goal_id": "664abc000...",
+    "thrust_area": "Safety",
+    "title": "Zero Incidents FY25",
+    "description": "Maintain zero safety incidents...",
+    "uom_type": "ZERO_BASED",
+    "measurement_type": "MIN",
+    "target_value": 1.0,
+    "weightage": 15,
+    "target_date": "2026-03-31T00:00:00Z",
+    "employee_name": "Alice Johnson",
+    "primary_owner_id": "EMP010",
+    "is_shared": true,
+    "achievement_value": null,
+    "progress_percentage": null,
+    "progress_status": null,
+    "status": "DRAFT",
+    "approver_name": null,
+    "submitted_at": null,
+    "approved_at": null,
+    "created_at": "2025-05-01T09:00:00Z",
+    "updated_at": "2025-05-01T09:00:00Z"
+  }
+]
+```
+
+---
+
+### Shared Goal Mechanics
+
+**Immutable Fields (read-only for recipients):**
+- `title`
+- `thrust_area`
+- `uom_type`
+- `measurement_type`
+- `target_value`
+- `description`
+- `target_date`
+
+**Mutable Fields (only on shared goal copies):**
+- `weightage` (via dedicated `/weightage` endpoint)
+
+**Read-only Enforcement:**
+1. **At Update Time**: `PATCH /employee/goals/{goal_id}` rejects any update to immutable fields with a 403 error
+2. **At Submission**: `POST /employee/goals/submit` validates that shared goal mutable fields match `source_snapshot`; if not, returns 400 with list of invalid goal_ids
+
+**Achievement Sync (Primary Owner Only):**
+When the primary owner (pusher) logs a quarterly check-in for a shared goal:
+1. System calls `sync_shared_achievement()` internally
+2. Latest `achievement_value` and `progress_percentage` propagate to all other `LOCKED` copies of the same source goal
+3. Only newly submitted quarter data is synced; previous quarters remain unchanged
+4. Non-primary-owner recipients cannot log their own check-ins—they only see synced data
+
+**Status Flow for Shared Goals:**
+- Created in `DRAFT` by pusher
+- Recipients can edit (adjust weightage) and submit
+- Manager approves → `LOCKED`
+- Only primary owner can log check-in and trigger sync
+- Recipients can request unlock if needed
+
+---
 
 ### Goal Creation
 - Minimum weightage per goal: **10%**
@@ -1323,56 +1607,84 @@ Every significant action is recorded in the `logs` collection via the centralize
 
 ## Email Notifications
 
-NorthStar sends background email notifications for the goal review workflow using Redis, Celery, and SMTP.
+NorthStar sends background email notifications for the goal review workflow using Redis, Celery, and SMTP. The notification system is non-blocking — if email enqueue fails, the main business logic continues.
 
-### Events
+### Events & Recipients
 
-| Event | Trigger | Recipient | Celery event type |
+| Event | Trigger | Recipient | Notification Type |
 |---|---|---|---|
 | Goal submission | Employee submits goals for review | Assigned manager | `GOALS_SUBMITTED` |
 | Goal approval | Manager approves a submitted goal | Employee goal owner | `GOAL_APPROVED` |
 | Goal return | Manager returns a submitted goal | Employee goal owner | `GOAL_RETURNED` |
 
-### Flow
+### Implementation Flow
 
-1. The API updates MongoDB and writes the primary business audit log, such as `SUBMIT_GOALS`, `APPROVE_GOAL`, or `RETURN_GOAL`.
-2. The API attempts to enqueue an email task through Celery using Redis as broker.
-3. The API writes an audit log for the enqueue result:
-   - `EMAIL_NOTIFICATION_QUEUED`
-   - `EMAIL_NOTIFICATION_SKIPPED`
-   - `EMAIL_NOTIFICATION_QUEUE_FAILED`
-4. The Celery worker sends the email through SMTP.
-5. The worker writes audit logs for SMTP execution:
-   - `EMAIL_SEND_STARTED`
-   - `EMAIL_SEND_SUCCEEDED`
-   - `EMAIL_SEND_FAILED`
-   - `EMAIL_SEND_SKIPPED`
+1. **Business Action**: API updates MongoDB and writes the primary audit log (`SUBMIT_GOALS`, `APPROVE_GOAL`, or `RETURN_GOAL`)
+2. **Notification Enqueue**: API calls `notification_service._enqueue_email()` with recipient email, subject, and body
+3. **Email Dispatch**: Service queues Celery task `send_email.delay()` via Redis broker
+4. **Audit Logging**: API writes enqueue result audit logs:
+   - `EMAIL_NOTIFICATION_QUEUED` — task successfully queued with task ID
+   - `EMAIL_NOTIFICATION_SKIPPED` — recipient email missing
+   - `EMAIL_NOTIFICATION_QUEUE_FAILED` — exception during enqueue (non-blocking)
+5. **Worker Processing**: Celery worker picks up task and attempts SMTP send
+6. **Send Logging**: Worker writes execution audit logs:
+   - `EMAIL_SEND_STARTED` — connection and auth initiated
+   - `EMAIL_SEND_SUCCEEDED` — SMTP send complete
+   - `EMAIL_SEND_FAILED` — SMTP error (with retry policy: 3 retries at 60s intervals)
+   - `EMAIL_SEND_SKIPPED` — recipient validation failed
 
-Email queue failures do not block the main API workflow. A failed enqueue is logged and the goal action still completes.
+### Celery Configuration
 
-### SMTP Providers
+- **Task Definition**: `send_email` in `app/tasks/email_tasks.py`
+- **Broker**: Redis (configurable via `REDIS_URL`)
+- **Result Backend**: Redis (configurable via `CELERY_RESULT_BACKEND`)
+- **Retry Policy**: `autoretry_for=(smtplib.SMTPException, OSError)` with `max_retries=3` and `countdown=60s`
+- **Serialization**: JSON (configured in `celery_app.py`)
 
-Default SMTP settings use Gmail-style app password configuration:
+### Notification Service (app/services/notification_service.py)
 
+Three async functions handle notifications:
+- `notify_goals_submitted()` — sends to manager when employee submits goals
+- `notify_goal_approved()` — sends to employee when manager approves
+- `notify_goal_returned()` — sends to employee when manager returns (includes manager note)
+
+All functions are non-blocking; enqueue exceptions are caught and logged without disrupting the business transaction.
+
+### SMTP Configuration & Providers
+
+The system uses configurable SMTP settings via environment variables. Default configuration uses Gmail-style app password.
+
+**Default (Gmail with app password):**
 ```env
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USERNAME=northstar@example.com
-SMTP_PASSWORD=dummy-app-password
+SMTP_PASSWORD=<gmail-app-password>
 SMTP_USE_TLS=true
+EMAIL_FROM=northstar@example.com
 ```
 
-For SendGrid SMTP:
-
+**SendGrid SMTP:**
 ```env
 SMTP_HOST=smtp.sendgrid.net
 SMTP_PORT=587
 SMTP_USERNAME=apikey
-SMTP_PASSWORD=<sendgrid_api_key>
+SMTP_PASSWORD=<sendgrid-api-key>
 SMTP_USE_TLS=true
+EMAIL_FROM=northstar@example.com
 ```
 
-Replace `SMTP_PASSWORD=dummy-app-password` with the real app password or API key in `.env`.
+**Development (without auth):**
+```env
+SMTP_HOST=localhost
+SMTP_PORT=1025
+SMTP_USERNAME=
+SMTP_PASSWORD=
+SMTP_USE_TLS=false
+EMAIL_FROM=northstar@localhost
+```
+
+The email worker respects all SMTP settings and logs connection details in audit logs. Connection failures automatically trigger retry logic (up to 3 retries with 60-second intervals).
 
 ---
 
@@ -1388,6 +1700,73 @@ The Shared Goal feature allows an Admin or Manager to broadcast a departmental K
 4. Recipients can only adjust `weightage` via `PATCH /employee/goals/{goal_id}/weightage`; all other fields (`title`, `target_value`, `uom_type`, `thrust_area`, `description`, `measurement_type`, `target_date`) are enforced read-only — both at update time and at submission time via snapshot comparison
 5. When the **primary owner** (the pusher) logs a quarterly check-in, `sync_shared_achievement()` propagates `achievement_value`, `progress_percentage`, and only the newly submitted quarter entries to all other `LOCKED` copies sharing the same `source_goal_id`
 6. Non-primary-owner recipients see the synced achievement data but cannot log their own check-ins (they can only submit and have their goals approved)
+
+---
+
+## Organization Hierarchy & Structure
+
+### GET /organization/hierarchy
+
+Retrieve the complete organizational hierarchy as a recursive tree structure. This endpoint is accessible to all authenticated users (Employee, Manager, Admin, HR) and displays the org structure built from `manager_id` relationships.
+
+**Auth:** Bearer token required (any authenticated user)
+
+**Response `200`:** Recursive array of `HierarchyNode` objects
+
+```json
+[
+  {
+    "employee_id": "EMP010",
+    "name": "Priya Sharma",
+    "designation": "VP Engineering",
+    "department": "Engineering",
+    "role": "MANAGER",
+    "manager_id": null,
+    "children": [
+      {
+        "employee_id": "EMP001",
+        "name": "Alice Johnson",
+        "designation": "Software Engineer",
+        "department": "Engineering",
+        "role": "EMPLOYEE",
+        "manager_id": "EMP010",
+        "children": []
+      },
+      {
+        "employee_id": "EMP002",
+        "name": "Bob Smith",
+        "designation": "Senior Engineer",
+        "department": "Engineering",
+        "role": "EMPLOYEE",
+        "manager_id": "EMP010",
+        "children": []
+      }
+    ]
+  },
+  {
+    "employee_id": "EMP020",
+    "name": "Rajesh Kumar",
+    "designation": "VP Sales",
+    "department": "Sales",
+    "role": "MANAGER",
+    "manager_id": null,
+    "children": [ ... ]
+  }
+]
+```
+
+**How it works:**
+1. Queries all active users from MongoDB
+2. Builds a node map for all employees
+3. Identifies root users (those with `manager_id == null` or self-referencing)
+4. Recursively constructs children arrays by matching `manager_id` relationships
+5. Returns clean hierarchy without passwords or internal fields
+
+**Use Cases:**
+- Managers view their team structure
+- Employees view reporting lines
+- Admins audit org hierarchy
+- Frontend org chart rendering
 
 ---
 
@@ -1436,52 +1815,64 @@ SMTP_USE_TLS=true
 ### Prerequisites
 
 - Python 3.10+
-- MongoDB running locally or via Atlas
-- Redis running locally or via a managed service
+- MongoDB 4.4+ (local or Atlas)
+- Redis 6.0+ (local or managed service)
+- SMTP server access (Gmail, SendGrid, or local Mailhog for dev)
 
-### Install dependencies
+### Installation
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### Start the server
+### Start the API Server
+
+The FastAPI gateway auto-creates MongoDB indexes on startup.
 
 ```bash
 python -m app.main
 ```
 
-Or directly with uvicorn:
+Or with uvicorn directly:
 
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### Start the email worker
+The server runs on the configured `GATEWAY_PORT` (default: `8000`). Startup creates all required MongoDB indexes automatically via the `startup` event handler.
 
-Goal submission, approval, and return emails are queued with Celery and Redis, then sent by SMTP in the worker process.
+### Start the Celery Email Worker
+
+Background email notifications are processed by a dedicated Celery worker connected to Redis.
 
 ```bash
 celery -A app.core.celery_app:celery_app worker --loglevel=info
 ```
 
-If the `celery` executable is not on `PATH`, run it through the same Python environment used for the API:
+If `celery` is not on `PATH`, use Python module execution:
 
 ```bash
 python -m celery -A app.core.celery_app:celery_app worker --loglevel=info
 ```
 
-### API Docs
+The worker:
+- Polls Redis for email tasks queued by the API
+- Connects to SMTP server using configured credentials
+- Logs all send attempts, successes, and failures to MongoDB audit log
+- Retries failed sends up to 3 times with 60-second intervals
 
-Once running, open:
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
-- Health Check: `http://localhost:8000/`
+### Health Check & Documentation
 
-The health check endpoint returns:
-```json
-{ "message": "NorthStar API Gateway is live" }
+Once running, verify the server is live:
+
+```bash
+curl http://localhost:8000/
+# { "message": "NorthStar API Gateway is live" }
 ```
+
+Interactive API documentation:
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
 
 ---
 
