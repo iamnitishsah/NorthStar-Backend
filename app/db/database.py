@@ -5,8 +5,9 @@ from app.core.config import config
 mongo_client = AsyncIOMotorClient(config.MONGO_URI)
 db = mongo_client["NorthStarDB"]
 
-redis_client = Redis(
-    host=config.REDIS_HOST, port=config.REDIS_PORT, decode_responses=True
+redis_client = Redis.from_url(
+    config.REDIS_URL,
+    decode_responses=True,
 )
 
 
