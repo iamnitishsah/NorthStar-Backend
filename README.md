@@ -105,32 +105,9 @@ app/
 
 ## Architecture
 
-```
-Client (Browser / API Consumer)
-        │
-        ▼
-   FastAPI Gateway  (NorthStar API — port configurable via .env)
-        │
-        ├── JWT Middleware (HTTPBearer — validates every protected request)
-        ├── Role Guards   (require_employee / require_manager / require_admin)
-        │
-        ├── Auth Routes          /auth/*
-        ├── Employee Routes      /employee/goals/*
-        ├── Manager Routes       /manager/goals/*
-        ├── Admin Routes         /admin/goals/*
-        ├── Shared Goal Routes   /shared-goals/*
-        └── Organization Routes  /organization/*
-                │
-                ▼
-         MongoDB (Motor async)
-           └── NorthStarDB
-                 ├── users      — user profiles, credentials, manager links
-                 ├── goals      — all goal documents (personal + shared copies)
-                 └── logs       — append-only audit log
-                │
-                ▼
-         Redis (sync client, available for caching/rate-limiting)
-```
+<p align="center">
+  <img src="./Architecture%20Diagram.png" alt="NorthStar Architecture Diagram" width="100%">
+</p>
 
 ### MongoDB Indexes
 
@@ -1500,39 +1477,9 @@ When the primary owner (pusher) logs a quarterly check-in for a shared goal:
 ---
 
 ## Goal Lifecycle
-
-```
-                       ┌───────────────────────────────────────────┐
-                       │                 EMPLOYEE                  │
-                       └───────────────────────────────────────────┘
-                                           │
-                                 create_goal()
-                                           │
-                                           ▼
-                                       [ DRAFT ] ◄──────────────────────────────┐
-                                           │                                     │
-                                 submit_goals()                                  │
-                                           │                                     │
-                                           ▼                                     │
-                                     [ SUBMITTED ]                               │
-                                           │                                     │
-                           ┌──────────────┴───────────────┐                     │
-                           │           MANAGER             │                     │
-                           └──────────────────────────────┘                     │
-                                           │                                     │
-                           approve_goal()  │  return_goal()                      │
-                                           │                                     │
-                    ┌──────────────────────┴────────────────────┐               │
-                    ▼                                            ▼               │
-               [ LOCKED ]                               [ RETURNED ] ────────────┘
-                    │                                         ▲
-    quarterly_checkin()  [Employee]                          │
-    comment_on_goal()    [Manager]                unlock_goal()  [Admin]
-                    │                                         │
-                    └─────────────────────────────────────────┘
-                         (Admin unlocks → ADMIN_UNLOCKED status,
-                          treated same as RETURNED for edit/submit)
-```
+<p align="center">
+  <img src="./Goal%20Life%20Cycle.png" alt="NorthStar Architecture Diagram" width="100%">
+</p>
 
 **Status Summary:**
 
