@@ -19,8 +19,8 @@ async def register_user(payload: RegisterUserRequest):
         manager = await users.find_one({"employee_id": manager_id})
         if not manager:
             return False, "manager_id does not match an existing employee"
-        if manager.get("role") != Role.MANAGER:
-            return False, "manager_id must belong to a MANAGER user"
+        if manager.get("role") != Role.MANAGER and manager.get("role") != Role.ADMIN:
+            return False, "manager_id must belong to a MANAGER or ADMIN user"
 
     encrypted = hash_password(payload.password)
 
@@ -36,7 +36,7 @@ async def register_user(payload: RegisterUserRequest):
     role=payload.role,
     manager_id=manager_id,
     hashed_password=encrypted,
-    created_on=now,
+    created_at=now,
 )
 
     try:

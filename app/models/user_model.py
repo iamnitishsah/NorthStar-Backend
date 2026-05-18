@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from app.constants.enums import Gender, Role
@@ -16,3 +17,4 @@ class User(BaseModel):
     manager_id: Optional[str] = None
     hashed_password: str
     is_active: bool = True
+    created_at: datetime = Field(default_factory=datetime.now)
