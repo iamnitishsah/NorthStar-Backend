@@ -1584,7 +1584,7 @@ NorthStar sends background email notifications for the goal review workflow usin
 
 - **Task Definition**: `send_email` in `app/tasks/email_tasks.py`
 - **Broker**: Redis (configurable via `REDIS_URL`)
-- **Result Backend**: Redis (configurable via `CELERY_RESULT_BACKEND`)
+- **Result Backend**: Redis (configurable via `REDIS_URL`)
 - **Retry Policy**: `autoretry_for=(smtplib.SMTPException, OSError)` with `max_retries=3` and `countdown=60s`
 - **Serialization**: JSON (configured in `celery_app.py`)
 
@@ -1729,7 +1729,6 @@ MONGO_URI=mongodb://localhost:27017/
 REDIS_HOST=localhost
 REDIS_PORT=6379
 REDIS_URL=redis://localhost:6379/0
-CELERY_RESULT_BACKEND=redis://localhost:6379/1
 EMAIL_FROM=northstar@example.com
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
@@ -1747,7 +1746,6 @@ SMTP_USE_TLS=true
 | `REDIS_HOST` | `localhost` | Redis server host |
 | `REDIS_PORT` | `6379` | Redis server port |
 | `REDIS_URL` | `redis://localhost:6379/0` | Celery broker URL |
-| `CELERY_RESULT_BACKEND` | `redis://localhost:6379/1` | Celery result backend |
 | `EMAIL_FROM` | `northstar@example.com` | Sender email address |
 | `SMTP_HOST` | `smtp.gmail.com` | SMTP host; for SendGrid use `smtp.sendgrid.net` |
 | `SMTP_PORT` | `587` | SMTP port |

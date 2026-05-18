@@ -4,7 +4,7 @@ from app.core.config import config
 celery_app = Celery(
     "NorthStar",
     broker=config.REDIS_URL,
-    backend=config.CELERY_RESULT_BACKEND,
+    backend=config.REDIS_URL,
     include=["app.tasks.email_tasks"],
 )
 
