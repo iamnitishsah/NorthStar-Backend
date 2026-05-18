@@ -14,7 +14,7 @@ class Settings:
     MONGO_URI: str = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
     REDIS_HOST: str = os.getenv("REDIS_HOST", "localhost")
     REDIS_PORT: int = int(os.getenv("REDIS_PORT", 6379))
-    REDIS_URL: str = os.getenv("REDIS_URL", f"redis://{REDIS_HOST}:{REDIS_PORT}/0")
+    REDIS_URL: str = os.getenv("REDIS_URL", "redis://red-d859iv6k1jcs73ffqvgg:6379")
     CELERY_RESULT_BACKEND: str = os.getenv("CELERY_RESULT_BACKEND", f"redis://{REDIS_HOST}:{REDIS_PORT}/1")
     EMAIL_FROM: str = os.getenv("EMAIL_FROM", "northstar@example.com")
     SMTP_HOST: str = os.getenv("SMTP_HOST", "smtp.gmail.com")
