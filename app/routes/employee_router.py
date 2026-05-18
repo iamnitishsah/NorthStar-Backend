@@ -25,6 +25,7 @@ from app.schemas.shared_goal_schema import SharedGoalResponse, UpdateSharedGoalW
 router = APIRouter(prefix="/employee/goals", tags=["Employee APIs"])
 
 
+
 @router.get("/my", response_model=List[ViewGoalResponse])
 async def my_goals_router(
     status: GoalStatus | None = None,
@@ -34,6 +35,7 @@ async def my_goals_router(
     goal = await my_goals(current_user, status)
 
     return goal
+
 
 
 @router.post("/", response_model=dict)
@@ -58,6 +60,7 @@ async def create_goal_router(
     return {"message": message}
 
 
+
 @router.patch("/{goal_id}", response_model=dict)
 async def update_goal_router(
     goal_id: str,
@@ -80,6 +83,7 @@ async def update_goal_router(
     return {"message": message}
 
 
+
 @router.delete("/{goal_id}", response_model=dict)
 async def delete_goal_router(
     goal_id: str,
@@ -98,6 +102,7 @@ async def delete_goal_router(
         )
 
     return {"message": message}
+
 
 
 @router.post("/submit", response_model=dict)
@@ -122,6 +127,25 @@ async def submit_goal_router(
 
 
 
+@router.post("/{goal_id}/unlock-request", response_model=dict)
+async def request_unlock_goal_router(
+    goal_id: str,
+    payload: UnlockGoalRequestCreate,
+    current_user: dict = Depends(get_current_user),
+    employee=Depends(require_employee)
+):
+    success, message = await request_unlock_goal(goal_id, payload.reason, current_user)
+
+    if not success:
+        raise HTTPException(
+            status_code=400,
+            detail=message
+        )
+
+    return {"message": message}
+
+
+
 @router.patch("/{goal_id}/quarterly-checkin", response_model=dict)
 async def quarterly_checkin_router(goal_id: str, payload: QuarterlyCheckinRequest, current_user: dict = Depends(get_current_user)):
     success, message = await quarterly_checkin(goal_id, payload, current_user)
@@ -133,6 +157,7 @@ async def quarterly_checkin_router(goal_id: str, payload: QuarterlyCheckinReques
         )
 
     return {"message": message}
+
 
 
 @router.get("/my-shared-goals", response_model=List[SharedGoalResponse])
@@ -153,23 +178,5 @@ async def update_weightage_router(
 
     if not success:
         raise HTTPException(status_code=400, detail=message)
-
-    return {"message": message}
-
-
-@router.post("/{goal_id}/unlock-request", response_model=dict)
-async def request_unlock_goal_router(
-    goal_id: str,
-    payload: UnlockGoalRequestCreate,
-    current_user: dict = Depends(get_current_user),
-    employee=Depends(require_employee)
-):
-    success, message = await request_unlock_goal(goal_id, payload.reason, current_user)
-
-    if not success:
-        raise HTTPException(
-            status_code=400,
-            detail=message
-        )
 
     return {"message": message}

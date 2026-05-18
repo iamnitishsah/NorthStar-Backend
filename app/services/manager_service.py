@@ -148,10 +148,15 @@ async def approve_goal(goal_id: str, tweaks: dict | None, current_user: dict) ->
         {"employee_id": goal_data["employee_id"]},
         {"email": 1}
     )
-    notify_goal_approved(
+    await notify_goal_approved(
         employee_email=employee.get("email") if employee else None,
         goal_title=goal_data.get("title"),
         manager_name=current_user.get("name"),
+        user_id=current_user["employee_id"],
+        metadata={
+            "goal_id": goal_id,
+            "employee_id": goal_data["employee_id"],
+        },
     )
 
     return True, "Goal approved successfully"
@@ -213,11 +218,16 @@ async def return_goal(goal_id: str, payload: ReturnGoalRequest, current_user: di
         {"employee_id": goal_data["employee_id"]},
         {"email": 1}
     )
-    notify_goal_returned(
+    await notify_goal_returned(
         employee_email=employee.get("email") if employee else None,
         goal_title=goal_data.get("title"),
         manager_name=current_user.get("name"),
         manager_note=payload.manager_note,
+        user_id=current_user["employee_id"],
+        metadata={
+            "goal_id": goal_id,
+            "employee_id": goal_data["employee_id"],
+        },
     )
 
     return True, "Goal returned successfully"

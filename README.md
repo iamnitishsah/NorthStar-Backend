@@ -1311,6 +1311,68 @@ Every significant action is recorded in the `logs` collection via the centralize
 | `REQUEST_UNLOCK_GOAL` | Employee requests unlock | `request_id`, `goal_id`, `reason` |
 | `APPROVE_UNLOCK_REQUEST` | Admin approves unlock request | `request_id`, `goal_id`, `requester_id` |
 | `REJECT_UNLOCK_REQUEST` | Admin rejects unlock request | `request_id`, `goal_id`, `requester_id`, `reason` |
+| `EMAIL_NOTIFICATION_QUEUED` | API process queues email | `event_type`, `to_email`, `subject`, `task_id`, event metadata |
+| `EMAIL_NOTIFICATION_SKIPPED` | API process skips email enqueue | `event_type`, `reason`, event metadata |
+| `EMAIL_NOTIFICATION_QUEUE_FAILED` | API process fails to enqueue email | `event_type`, `error`, event metadata |
+| `EMAIL_SEND_STARTED` | Celery worker starts SMTP send | `task_id`, `event_type`, `to_email`, `subject`, SMTP host/port |
+| `EMAIL_SEND_SUCCEEDED` | Celery worker sends email | `task_id`, `event_type`, `to_email`, `subject`, SMTP host/port |
+| `EMAIL_SEND_FAILED` | Celery worker fails SMTP send | `task_id`, `event_type`, `to_email`, `subject`, `error` |
+| `EMAIL_SEND_SKIPPED` | Celery worker skips send | `task_id`, `event_type`, `reason` |
+
+---
+
+## Email Notifications
+
+NorthStar sends background email notifications for the goal review workflow using Redis, Celery, and SMTP.
+
+### Events
+
+| Event | Trigger | Recipient | Celery event type |
+|---|---|---|---|
+| Goal submission | Employee submits goals for review | Assigned manager | `GOALS_SUBMITTED` |
+| Goal approval | Manager approves a submitted goal | Employee goal owner | `GOAL_APPROVED` |
+| Goal return | Manager returns a submitted goal | Employee goal owner | `GOAL_RETURNED` |
+
+### Flow
+
+1. The API updates MongoDB and writes the primary business audit log, such as `SUBMIT_GOALS`, `APPROVE_GOAL`, or `RETURN_GOAL`.
+2. The API attempts to enqueue an email task through Celery using Redis as broker.
+3. The API writes an audit log for the enqueue result:
+   - `EMAIL_NOTIFICATION_QUEUED`
+   - `EMAIL_NOTIFICATION_SKIPPED`
+   - `EMAIL_NOTIFICATION_QUEUE_FAILED`
+4. The Celery worker sends the email through SMTP.
+5. The worker writes audit logs for SMTP execution:
+   - `EMAIL_SEND_STARTED`
+   - `EMAIL_SEND_SUCCEEDED`
+   - `EMAIL_SEND_FAILED`
+   - `EMAIL_SEND_SKIPPED`
+
+Email queue failures do not block the main API workflow. A failed enqueue is logged and the goal action still completes.
+
+### SMTP Providers
+
+Default SMTP settings use Gmail-style app password configuration:
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=northstar@example.com
+SMTP_PASSWORD=dummy-app-password
+SMTP_USE_TLS=true
+```
+
+For SendGrid SMTP:
+
+```env
+SMTP_HOST=smtp.sendgrid.net
+SMTP_PORT=587
+SMTP_USERNAME=apikey
+SMTP_PASSWORD=<sendgrid_api_key>
+SMTP_USE_TLS=true
+```
+
+Replace `SMTP_PASSWORD=dummy-app-password` with the real app password or API key in `.env`.
 
 ---
 
@@ -1400,14 +1462,13 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 Goal submission, approval, and return emails are queued with Celery and Redis, then sent by SMTP in the worker process.
 
 ```bash
-celery -A app.core.celery_app.celery_app worker --loglevel=info
+celery -A app.core.celery_app:celery_app worker --loglevel=info
 ```
 
-For SendGrid SMTP, set:
-```env
-SMTP_HOST=smtp.sendgrid.net
-SMTP_USERNAME=apikey
-SMTP_PASSWORD=<sendgrid_api_key>
+If the `celery` executable is not on `PATH`, run it through the same Python environment used for the API:
+
+```bash
+python -m celery -A app.core.celery_app:celery_app worker --loglevel=info
 ```
 
 ### API Docs

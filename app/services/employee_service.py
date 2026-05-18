@@ -346,10 +346,19 @@ async def submit_goals(goal_ids: list[str], current_user: dict) -> tuple[bool, s
 
     for manager_id, goal_titles in goals_by_manager.items():
         manager = await users.find_one({"employee_id": manager_id}, {"email": 1})
-        notify_goals_submitted(
+        await notify_goals_submitted(
             manager_email=manager.get("email") if manager else None,
             employee_name=current_user.get("name"),
             goal_titles=goal_titles,
+            user_id=current_user["employee_id"],
+            metadata={
+                "manager_id": manager_id,
+                "goal_ids": [
+                    str(goal["_id"])
+                    for goal in selected_goals
+                    if goal.get("manager_id") == manager_id
+                ],
+            },
         )
 
     return True, "Goals submitted successfully"
