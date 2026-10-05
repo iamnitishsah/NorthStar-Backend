@@ -1,4 +1,4 @@
-name: NorthStar CI
+name: NorthStar CI/CD
 
 on:
   push:
@@ -8,23 +8,37 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio httpx
+
+      - name: Run Unit Tests
+        run: pytest -v
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Create Temporary .env for Build
+      - name: Create Temporary .env for Docker Build
         run: |
           echo "GATEWAY_PORT=8000" > .env
           echo "JWT_SECRET=testsecret" >> .env
           echo "JWT_REFRESH_SECRET=testrefresh" >> .env
 
-      - name: Build Docker Compose Stack
-        # This confirms your Dockerfile and requirements.txt compile successfully
+      - name: Verify Docker Compose Build
         run: docker compose build
 
   deploy:
