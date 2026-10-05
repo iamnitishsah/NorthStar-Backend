@@ -1,0 +1,28 @@
+name: NorthStar CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create Temporary .env for Build
+        run: |
+          echo "GATEWAY_PORT=8000" > .env
+          echo "JWT_SECRET=testsecret" >> .env
+          echo "JWT_REFRESH_SECRET=testrefresh" >> .env
+
+      - name: Build Docker Compose Stack
+        # This confirms your Dockerfile and requirements.txt compile successfully
+        run: docker-compose build
