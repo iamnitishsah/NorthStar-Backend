@@ -38,3 +38,4 @@ docker-compose.yml
 mongo_data/
 *.rdb
 *.aof
+*.pem
