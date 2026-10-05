@@ -1,0 +1,40 @@
+# Git repository and history
+.git
+.gitignore
+
+# Local Environment Variables (Crucial: prevents baking secrets into the image)
+.env
+
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python Cache & Compiled Files
+__pycache__/
+*.py[codz]
+*.pyo
+*.pyd
+.Python
+
+# IDE & OS Files
+.idea/
+.vscode/
+.DS_Store
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Docker Files (They don't need to live inside the container)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Local Databases/Cache (Prevents copying local MongoDB/Redis data if tested locally)
+mongo_data/
+*.rdb
+*.aof
