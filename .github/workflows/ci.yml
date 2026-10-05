@@ -25,4 +25,4 @@ jobs:
 
       - name: Build Docker Compose Stack
         # This confirms your Dockerfile and requirements.txt compile successfully
-        run: docker-compose build
+        run: docker compose build
